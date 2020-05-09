@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.2
+// @version     1.3
 // @grant       none
 // ==/UserScript==
 
@@ -115,6 +115,7 @@ function getData(node)
 				priceOld = parseFloat(trim(($(".oldListPrice", parent) || {}).innerText).replace(/^\$([0-9.]+)/g, "$1")),
 				item = findParent(parent)
 							|| findParent(parent, {tagName: "DIV", dataset: {type: "fpdeal"}})
+							|| findParent(parent, {tagName: "DIV", classList: ["resultRow"]})
 							|| findParent(parent, {tagName: "DIV", dataset: {role: "frontpageDealContent"}});
 
 		item && item.classList.toggle("free", (priceNew === 0 || priceFree) ? true : false);
