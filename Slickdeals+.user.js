@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.5
+// @version     1.5.1
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -160,7 +160,7 @@ function fixLink(node)
 //			a.href = a.href.replace(/\?.*/i, "?" + m[2]);
 			if (!a._resolved)
 			{
-				a.classList.toggle("blue", true);
+				a.classList.toggle("primary", true);
 				a.classList.toggle("success", false);
 			}
 			if (!linksData[m[3]])
@@ -195,7 +195,7 @@ function receiveMessage(e)
 		a[i]._resolved = true;
 		a[i].href = data.url;
 		a[i].classList.toggle("success", true);
-		a[i].classList.toggle("blue", false);
+		a[i].classList.toggle("primary", false);
 	}
 }
 
