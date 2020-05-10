@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.5.1
+// @version     1.5.3
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
