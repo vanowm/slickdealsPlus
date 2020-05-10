@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.6
+// @version     1.6.1
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -27,6 +27,88 @@
 				}
 			});
 
+	function ls(id, data, stringify)
+	{
+		let r;
+		if (typeof(data) == "undefined")
+		{
+			if (id in ls.cache)
+			{
+				r = ls.cache[id];
+			}
+			else
+			{
+				r = localStorage.getItem(id);
+				if (r !== null)
+				{
+					try
+					{
+						r = JSON.parse(r);
+						ls.cache[id] = r;
+					}
+					catch(e)
+					{
+						log(e);
+						log([id, data, r]);
+					}
+				}
+			}
+			return r;
+		}
+
+		if (!(id in ls.cache))
+			ls.cache[id] = [];
+
+		ls.cache[id] = data;
+		r = ls.save(id, data, r, stringify);
+		return r;
+	}
+	ls.cache = {};
+	ls.max = 50000;//max items to store
+	ls.safeKeys = ["options", "dl", "order"];
+	ls.save = function(id, data, r, stringify, attempt)
+	{
+		let d = data;
+		if (typeof(data) == "undefined" )
+			d = ls.cache[id];
+
+		if (typeof(stringify) == "undefined" || stringify)
+			d = JSON.stringify(d);
+
+		try
+		{
+			r = localStorage.setItem(id, d);
+		}
+		catch(e)
+		{
+			ls.purge();
+			if (typeof(attempt) == "undefined")
+				attempt = 0;
+log([attempt, data, e]);
+
+			if (attempt < 100)
+				r = ls.save(id, data, r, stringify, ++attempt);
+
+		}
+		return r;
+	}
+	//clear database;
+	ls.purge = function()
+	{
+		let array = Object.keys(localStorage),
+				n = 0;
+
+//		while(localStorage.length > ls.max)
+		while(n < ls.max)
+		{
+			let key = array[n++];
+			if (isNaN(Number(key)))
+				continue;
+
+//log("Deleting " + key + ": " + localStorage.getItem(key));
+			return localStorage.removeItem(key);
+		}
+	}
 
 	function $$(id, node, all)
 	{
@@ -159,27 +241,45 @@
 
 			a._href = a.href;
 			let m = a.href.match(/(\?|&)(pno=([^&]+))/i);
-			if (m)
-			{
+			if (!m)
+				continue;
 	//			a.href = a.href.replace(/\?.*/i, "?" + m[2]);
-				if (!a._resolved)
-				{
-					a.classList.toggle("primary", true);
-					a.classList.toggle("success", false);
-				}
-				if (!linksData[m[3]])
-				{
-					linksData[m[3]] = [a];
-					let iframe = document.createElement("iframe");
-					iframe.id = "iframe" + m[3];
-					iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + m[3] + "&r=" + location.protocol + "//" + location.host;
-					iframe.style.display = "none";
-					document.body.appendChild(iframe);
-				}
-				if (linksData[m[3]].indexOf(a) == -1)
-					linksData[m[3]][linksData[m[3]].length] = a;
+			let url = ls(m[3]);
+			if (url)
+			{
+				linkUpdate(a, url);
+				continue;
 			}
+			if (!a._resolved)
+			{
+				a.classList.toggle("primary", true);
+				a.classList.toggle("success", false);
+			}
+			if (!linksData[m[3]])
+			{
+				linksData[m[3]] = [a];
+				addIframe(m[3]);
+			}
+			if (linksData[m[3]].indexOf(a) == -1)
+				linksData[m[3]][linksData[m[3]].length] = a;
 		}
+	}
+
+	function addIframe(id)
+	{
+		let iframe = document.createElement("iframe");
+		iframe.id = "iframe" + id;
+		iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + id + "&r=" + location.protocol + "//" + location.host;
+		iframe.style.display = "none";
+		document.body.appendChild(iframe);
+	}
+
+	function linkUpdate(a, url)
+	{
+		a._resolved = true;
+		a.href = url;
+		a.classList.toggle("success", true);
+		a.classList.toggle("primary", false);
 	}
 
 	function receiveMessage(e)
@@ -194,12 +294,10 @@
 		let iframe = $$("iframe" + data.id);
 		iframe.parentNode.removeChild(iframe);
 
+		ls(data.id, data.url);
 		for(let i = 0; i < a.length; i++)
 		{
-			a[i]._resolved = true;
-			a[i].href = data.url;
-			a[i].classList.toggle("success", true);
-			a[i].classList.toggle("primary", false);
+			linkUpdate(a[i], data.url);
 		}
 	}
 
