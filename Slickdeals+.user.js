@@ -3,9 +3,26 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.4
+// @version     1.5
+// @run-at      document-start
 // @grant       none
 // ==/UserScript==
+
+let log = console.log.bind(console),
+		linksData = {},
+		observer = new MutationObserver(function(mutations, observer)
+		{
+//		log("--------", mutations);
+			for (let i = 0; i < mutations.length; i++)
+			{
+				for (let n = 0; n < mutations[i].addedNodes.length; n++)
+				{
+					getData(mutations[i].addedNodes[n]);
+					fixLink(mutations[i].addedNodes[n]);
+				}
+			}
+		});
+
 
 function $$(id, node, all)
 {
@@ -123,7 +140,7 @@ function getData(node)
 	}
 	return r;
 }
-let linksData = {};
+
 function fixLink(node)
 {
 	let links = $$("a", node, true);
@@ -141,11 +158,17 @@ function fixLink(node)
 		if (m)
 		{
 //			a.href = a.href.replace(/\?.*/i, "?" + m[2]);
+			if (!a._resolved)
+			{
+				a.classList.toggle("blue", true);
+				a.classList.toggle("success", false);
+			}
 			if (!linksData[m[3]])
 			{
 				linksData[m[3]] = [a];
 				let iframe = document.createElement("iframe");
-				iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + m[3];
+				iframe.id = "iframe" + m[3];
+				iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + m[3] + "&r=" + location.protocol + "//" + location.host;
 				iframe.style.display = "none";
 				document.body.appendChild(iframe);
 			}
@@ -154,6 +177,7 @@ function fixLink(node)
 		}
 	}
 }
+
 function receiveMessage(e)
 {
 	if (["https://unplumb-waves.000webhostapp.com", "https://sLickdeals.net"].indexOf(e.origin) == -1)
@@ -162,38 +186,30 @@ function receiveMessage(e)
 	let a,data = JSON.parse(e.data);
 	if (!data || !(a = linksData[data.id]))
 		return;
-	
-	for(let i = 0; i < a.length; i++)
-		a[i].href = data.url;
 
+	let iframe = $$("iframe" + data.id);
+	iframe.parentNode.removeChild(iframe);
+
+	for(let i = 0; i < a.length; i++)
+	{
+		a[i]._resolved = true;
+		a[i].href = data.url;
+		a[i].classList.toggle("success", true);
+		a[i].classList.toggle("blue", false);
+	}
 }
 
-window.addEventListener("message", receiveMessage, false);
-
-let log = console.log.bind(console);
-
-getData(document);
-fixLink(document);
-
-var observer = new MutationObserver(function(mutations, observer) {
-//		console.log("--------", mutations);
-		for (let i = 0; i < mutations.length; i++)
-		{
-			for (let n = 0; n < mutations[i].addedNodes.length; n++)
-			{
-				getData(mutations[i].addedNodes[n]);
-				fixLink(mutations[i].addedNodes[n]);
-			}
-		}
-});
-
-observer.observe(document, {
-	subtree: true,
-	childList: true
-});
-
-let css = document.createElement("style");
-css.innerHTML = multiline(function(){/*
+function main()
+{
+	window.removeEventListener('DOMContentLoaded', main, false);
+	observer.observe(document, {
+		subtree: true,
+		childList: true
+	});
+	getData(document);
+	fixLink(document);
+	let css = document.createElement("style");
+	css.innerHTML = multiline(function(){/*
 div.free,
 li.free
 {
@@ -206,5 +222,11 @@ div.free,
 	margin: 5px;
 }
 */});
+	document.getElementsByTagName("head")[0].appendChild(css);
+}
 
-document.getElementsByTagName("head")[0].appendChild(css);
+window.addEventListener("message", receiveMessage, false);
+window.addEventListener('DOMContentLoaded', main, false);
+
+if (window.document.readyState == "complete")
+	main();
