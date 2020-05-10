@@ -3,18 +3,18 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.3
+// @version     1.4
 // @grant       none
 // ==/UserScript==
 
-function $(id, node, all)
+function $$(id, node, all)
 {
 	try
 	{
 		if (!node)
 			node = document;
 
-		if (id.match(/^[a-zA-Z0-9]/))
+		if (!all && id.match(/^[a-zA-Z0-9]/))
 			return node.getElementById(id);
 
 		if (all)
@@ -87,21 +87,12 @@ function multiline(func, ws)
 {
 	func = func.toString();
 	func = func.slice(func.indexOf("/*") + 2, func.lastIndexOf("*/")).split("*//*").join("*/");
-	func = func.replace(/{SVG-([A-Z]+)}/g, function(a, b)
-	{
-		b = b.toLowerCase();
-		if (SVG[b])
-			return SVG[b];
-
-		return a;
-	});
 	return ws ? func : func.replace(/[\n\t]*/g, "");
 }
 
-
 function getData(node)
 {
-	let items = $(".salePrice,.itemPrice,.price", node, true) || [],
+	let items = $$(".salePrice,.itemPrice,.price", node, true) || [],
 			r = [];
 
 	for (let i = 0; i < items.length; i++)
@@ -111,8 +102,8 @@ function getData(node)
 				price = trim(itemPrice.innerText),
 				priceFree = price && price.match(/or free/i),
 				priceNew = price ? ((price.toLowerCase() == "free") ? 0 : (price.match(/^\$/) ? parseFloat(price.replace(/[^0-9.]/g, "")) : NaN)) : NaN,
-				priceRetail = parseFloat(trim(($(".retailPrice", parent) || {}).innerText).replace(/^\$([0-9.]+)/g, "$1")),
-				priceOld = parseFloat(trim(($(".oldListPrice", parent) || {}).innerText).replace(/^\$([0-9.]+)/g, "$1")),
+				priceRetail = parseFloat(trim(($$(".retailPrice", parent) || {}).innerText).replace(/^\$([0-9.]+)/g, "$1")),
+				priceOld = parseFloat(trim(($$(".oldListPrice", parent) || {}).innerText).replace(/^\$([0-9.]+)/g, "$1")),
 				item = findParent(parent)
 							|| findParent(parent, {tagName: "DIV", dataset: {type: "fpdeal"}})
 							|| findParent(parent, {tagName: "DIV", classList: ["resultRow"]})
@@ -132,9 +123,58 @@ function getData(node)
 	}
 	return r;
 }
+let linksData = {};
+function fixLink(node)
+{
+	let links = $$("a", node, true);
+	if (!links)
+		return;
+
+	for(let i = 0; i < links.length; i++)
+	{
+		let a = links[i];
+		if ("_href" in a)
+			continue;
+
+		a._href = a.href;
+		let m = a.href.match(/(\?|&)(pno=([^&]+))/i);
+		if (m)
+		{
+//			a.href = a.href.replace(/\?.*/i, "?" + m[2]);
+			if (!linksData[m[3]])
+			{
+				linksData[m[3]] = [a];
+				let iframe = document.createElement("iframe");
+				iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + m[3];
+				iframe.style.display = "none";
+				document.body.appendChild(iframe);
+			}
+			if (linksData[m[3]].indexOf(a) == -1)
+				linksData[m[3]][linksData[m[3]].length] = a;
+		}
+	}
+}
+function receiveMessage(e)
+{
+	if (["https://unplumb-waves.000webhostapp.com", "https://sLickdeals.net"].indexOf(e.origin) == -1)
+		return;
+
+	let a,data = JSON.parse(e.data);
+	if (!data || !(a = linksData[data.id]))
+		return;
+	
+	for(let i = 0; i < a.length; i++)
+		a[i].href = data.url;
+
+}
+
+window.addEventListener("message", receiveMessage, false);
+
 let log = console.log.bind(console);
 
 getData(document);
+fixLink(document);
+
 var observer = new MutationObserver(function(mutations, observer) {
 //		console.log("--------", mutations);
 		for (let i = 0; i < mutations.length; i++)
@@ -142,6 +182,7 @@ var observer = new MutationObserver(function(mutations, observer) {
 			for (let n = 0; n < mutations[i].addedNodes.length; n++)
 			{
 				getData(mutations[i].addedNodes[n]);
+				fixLink(mutations[i].addedNodes[n]);
 			}
 		}
 });
