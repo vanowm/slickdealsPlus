@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.6.2
+// @version     1.6.3
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -23,6 +23,7 @@
 					{
 						getData(mutations[i].addedNodes[n]);
 						fixLink(mutations[i].addedNodes[n]);
+						getLinks(mutations[i].addedNodes[n]);
 					}
 				}
 			});
@@ -227,6 +228,78 @@ log([attempt, data, e]);
 		return r;
 	}
 
+	function getLinks(node)
+	{
+		return;
+		let obj = $$("[data-threadid],[data-pno],[data-unique-id],[data-outclick-target],[data-product-products]", node, true);
+		if (!obj)
+			return;
+
+		let types = {
+			threadid: "tid",
+			uniqueId: "tid",
+			outclickTarget: "tid",
+			productProducts: "",
+			pno: "pno"
+		}
+		for (let i = 0; i < obj.length; i++)
+		{
+			let a = obj[i],
+					id, type;
+
+			for (let t in types)
+			{
+				type = types[t];
+				if (!type && a.href)
+				{
+					let m = getIdFromUrl(a.href);
+					if (m)
+					{
+						id = m.id;
+						type = m.type;
+						break;
+					}
+				}
+				if (id = ~~a.dataset[t])
+				{
+					break;
+				}
+			}
+			if (!id)
+				continue;
+
+			if (ls(id))
+				continue;
+
+			if (!linksData[id])
+			{
+				linksData[id] = [a];
+				addIframe(id, type, a.href || "");
+			}
+		}
+	}
+	
+	function getIdFromUrl(url)
+	{
+		let q = ["tid", "sdtid", "pno"],
+				c = {
+					sdtid : "tid"
+				},
+				m;
+
+		for (let t = 0; t < q.length; t++)
+		{
+			let r = new RegExp("(\\?|(&|&amp;))((" + q[t] + ")=([^&]+))", "i");
+			if (m = url.match(r))
+				break;
+		}
+		if (!m)
+			return false;
+
+		m[4] = c[m[4]] || m[4];
+		return {id: m[5], type: m[4]};
+	}
+
 	function fixLink(node)
 	{
 		let links = $$("a", node, true);
@@ -240,13 +313,20 @@ log([attempt, data, e]);
 				continue;
 
 			a._href = a.href;
-			let m = a.href.match(/(\?|&)(pno=([^&]+))/i);
+			m = getIdFromUrl(a.href);
 			if (!m)
 				continue;
-	//			a.href = a.href.replace(/\?.*/i, "?" + m[2]);
-			let url = ls(m[3]);
+
+
+			let id = m.id,
+					type = m.type,
+					url = ls(id);
+
 			if (url)
 			{
+				if (typeof(url) == "object")
+					url = url[0];
+
 				linkUpdate(a, url);
 				continue;
 			}
@@ -255,23 +335,38 @@ log([attempt, data, e]);
 				a.classList.toggle("primary", true);
 				a.classList.toggle("success", false);
 			}
-			if (!linksData[m[3]])
+			if (!linksData[id])
 			{
-				linksData[m[3]] = [a];
-				addIframe(m[3]);
+				linksData[id] = [a];
+				addIframe(id, type, a._href);
 			}
-			if (linksData[m[3]].indexOf(a) == -1)
-				linksData[m[3]][linksData[m[3]].length] = a;
+			if (linksData[id].indexOf(a) == -1)
+				linksData[id][linksData[id].length] = a;
 		}
 	}
 
-	function addIframe(id)
+	framesList = [];
+	framesListUrl = [];
+	function _addIframe(id, type, url)
 	{
 		let iframe = document.createElement("iframe");
 		iframe.id = "iframe" + id;
-		iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + id + "&r=" + location.protocol + "//" + location.host;
+		iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + id + "&t=" + type + "&r=" + location.protocol + "//" + location.host + "&u=" + encodeURIComponent(url);
 		iframe.style.display = "none";
 		document.body.appendChild(iframe);
+	}
+	function addIframe(id, type, url)
+	{
+		let tid = type + id;
+		if (!framesList.length)
+		{
+			_addIframe(id, type, url);
+		}
+		if (framesList.indexOf(tid) == -1)
+		{
+			framesList[framesList.length] = tid;
+			framesListUrl[framesListUrl.length] = url;
+		}
 	}
 
 	function linkUpdate(a, url)
@@ -288,13 +383,28 @@ log([attempt, data, e]);
 			return;
 
 		let a,data = JSON.parse(e.data);
-		if (!data || !(a = linksData[data.id]))
+		if (!data)
+			return;
+
+		let d = data.url,
+				tid = data.type + data.id,
+				i = framesList.indexOf(tid);
+
+		framesList.splice(i, 1);
+		tid = framesList[0];
+		if (tid)
+			_addIframe(tid.replace(/[^0-9]/g, ''), tid.replace(/[0-9]/g, ''), data.urlOrig);
+
+		if (!data.url || data.url.match(/^https:\/\/(www\.)?slickdeals.net/i) || !(a = linksData[data.id]))
 			return;
 
 		let iframe = $$("iframe" + data.id);
 		iframe.parentNode.removeChild(iframe);
 
-		ls(data.id, data.url);
+		if (data.type && data.type != "tid")
+			d = [d, data.type];
+
+		ls(data.id, d);
 		for(let i = 0; i < a.length; i++)
 		{
 			linkUpdate(a[i], data.url);
@@ -328,6 +438,7 @@ div.free,
 		});
 		getData(document);
 		fixLink(document);
+		getLinks(document);
 	}//main()
 
 	if (document.readyState == "complete")
