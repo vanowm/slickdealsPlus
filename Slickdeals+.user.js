@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.6.1
+// @version     1.6.2
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -312,6 +312,7 @@ div.free,
 li.free
 {
 	box-shadow: 0 0 10px red;
+	background-color: #ffdde0 !important;
 }
 div.free,
 #fpMainContent .gridCategory .fpGridBox.list.free,
