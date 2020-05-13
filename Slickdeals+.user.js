@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.6.3
+// @version     1.6.4
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -12,6 +12,7 @@
 	if (window.top !== window.self)
 		return;
 
+	const linkResolver = "https://unplumb-waves.000webhostapp.com";
 	let log = console.log.bind(console),
 			linksData = {},
 			observer = new MutationObserver(function(mutations, observer)
@@ -103,7 +104,7 @@ log([attempt, data, e]);
 		while(n < ls.max)
 		{
 			let key = array[n++];
-			if (isNaN(Number(key)))
+			if (!key.match(/^[0-9]+(\-[0-9]+)?([a-z]{3,5})?$/))
 				continue;
 
 //log("Deleting " + key + ": " + localStorage.getItem(key));
@@ -231,7 +232,7 @@ log([attempt, data, e]);
 	function getLinks(node)
 	{
 		return;
-		let obj = $$("[data-threadid],[data-pno],[data-unique-id],[data-outclick-target],[data-product-products]", node, true);
+		let obj = $$("[data-pno],[data-threadid],[data-unique-id],[data-outclick-target],[data-product-products]", node, true);
 		if (!obj)
 			return;
 
@@ -268,7 +269,7 @@ log([attempt, data, e]);
 			if (!id)
 				continue;
 
-			if (ls(id))
+			if (ls(id + type))
 				continue;
 
 			if (!linksData[id])
@@ -281,7 +282,7 @@ log([attempt, data, e]);
 	
 	function getIdFromUrl(url)
 	{
-		let q = ["tid", "sdtid", "pno"],
+		let q = ["pno", "tid", "sdtid"],
 				c = {
 					sdtid : "tid"
 				},
@@ -297,6 +298,9 @@ log([attempt, data, e]);
 			return false;
 
 		m[4] = c[m[4]] || m[4];
+		let i = url.match(/(\?|(&|&amp;))lno=([0-9]+)/i);
+		if (i)
+			m[5] += "-" + i[3];
 		return {id: m[5], type: m[4]};
 	}
 
@@ -317,10 +321,10 @@ log([attempt, data, e]);
 			if (!m)
 				continue;
 
-
 			let id = m.id,
 					type = m.type,
-					url = ls(id);
+					u = a.href.match(/(\?|&|&amp;)u2=([^&#]*)/i),
+					url = u ? decodeURIComponent(u[2]) : ls(id + type);
 
 			if (url)
 			{
@@ -345,28 +349,35 @@ log([attempt, data, e]);
 		}
 	}
 
-	framesList = [];
-	framesListUrl = [];
+	let framesList = {i:0};
+	
 	function _addIframe(id, type, url)
 	{
 		let iframe = document.createElement("iframe");
-		iframe.id = "iframe" + id;
-		iframe.src = "https://unplumb-waves.000webhostapp.com/slickdeals/?" + id + "&t=" + type + "&r=" + location.protocol + "//" + location.host + "&u=" + encodeURIComponent(url);
+		iframe.id = "iframe" + type + id;
+		iframe.src = linkResolver + "/slickdeals/?" + id + "&t=" + type + "&r=" + location.protocol + "//" + location.host + "&u=" + encodeURIComponent(url);
 		iframe.style.display = "none";
 		document.body.appendChild(iframe);
+		framesList.i++;
+		return iframe;
 	}
+
 	function addIframe(id, type, url)
 	{
 		let tid = type + id;
-		if (!framesList.length)
-		{
-			_addIframe(id, type, url);
+		if ((framesList[tid] && framesList[tid].iframe) || ls(id + type))
+			return framesList[tid];
+
+		framesList[tid] = {
+			id: id,
+			type: type,
+			url: url,
+			iframe: null,
 		}
-		if (framesList.indexOf(tid) == -1)
-		{
-			framesList[framesList.length] = tid;
-			framesListUrl[framesListUrl.length] = url;
-		}
+		if (framesList.i < 4)
+			framesList[tid].iframe = _addIframe(id, type, url);
+
+		return framesList[tid];
 	}
 
 	function linkUpdate(a, url)
@@ -379,35 +390,45 @@ log([attempt, data, e]);
 
 	function receiveMessage(e)
 	{
-		if (["https://unplumb-waves.000webhostapp.com", "https://sLickdeals.net"].indexOf(e.origin) == -1)
+		if ([linkResolver, "https://slickdeals.net"].indexOf(e.origin) == -1)
+		{
+log(e);
 			return;
+		}
 
 		let a,data = JSON.parse(e.data);
 		if (!data)
+		{
+log(e.data);
 			return;
+		}
 
 		let d = data.url,
-				tid = data.type + data.id,
-				i = framesList.indexOf(tid);
+				tid = data.type + data.id;
 
-		framesList.splice(i, 1);
-		tid = framesList[0];
-		if (tid)
-			_addIframe(tid.replace(/[^0-9]/g, ''), tid.replace(/[0-9]/g, ''), data.urlOrig);
-
-		if (!data.url || data.url.match(/^https:\/\/(www\.)?slickdeals.net/i) || !(a = linksData[data.id]))
-			return;
-
-		let iframe = $$("iframe" + data.id);
-		iframe.parentNode.removeChild(iframe);
-
-		if (data.type && data.type != "tid")
-			d = [d, data.type];
-
-		ls(data.id, d);
-		for(let i = 0; i < a.length; i++)
+		if (framesList[tid])
 		{
-			linkUpdate(a[i], data.url);
+			framesList[tid].iframe.parentNode.removeChild(framesList[tid].iframe);
+			framesList.i--;
+		}
+		if (data.url && !data.url.match(/^https:\/\/(www\.)?slickdeals.net/i))
+		{
+			ls(data.id + data.type, d);
+			if (a = linksData[data.id])
+			{
+				for(let i = 0; i < a.length; i++)
+				{
+					linkUpdate(a[i], data.url);
+				}
+			}
+		}
+		for(let tid in framesList)
+		{
+			if (framesList[tid].iframe === null)
+			{
+				addIframe(framesList[tid].id, framesList[tid].type, framesList[tid].url);
+				break;
+			}
 		}
 	}
 
@@ -429,6 +450,24 @@ div.free,
 #fpMainContent .gridCategory .fpGridBox.simple.free
 {
 	margin: 5px;
+}
+#fpMainContent .gridCategory .grid .fpItem .itemInfoLine .avatarBox,
+#fpMainContent .gridCategory ul.gridDeals .fpGridBox .itemInfoLine .avatarBox,
+#fpMainContent .gridCategory .grid .fpItem.isPersonalizedDeal .itemBottomRow .comments
+{
+	display: initial !important;
+}
+#fpMainContent .gridCategory ul.gridDeals .fpGridBox .itemInfoLine .avatarBox
+{
+	float: right;
+	position: initial;
+}
+#fpMainContent .gridCategory ul.gridDeals .fpGridBox .fpItem .itemBottomRow .comments
+{
+	display: initial !important;
+	position: absolute;
+	right: -2.5em;
+	bottom: 5em;
 }
 	*/});
 		document.getElementsByTagName("head")[0].appendChild(css);
