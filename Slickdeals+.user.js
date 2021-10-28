@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.7
+// @version     1.8
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -13,6 +13,7 @@
 		return;
 
 	const linkResolver = "https://unplumb-waves.000webhostapp.com";
+	const LSNAME = "linksCache";
 	let log = console.log.bind(console),
 			linksData = {},
 			observer = new MutationObserver(function(mutations, observer)
@@ -29,67 +30,54 @@
 				}
 			});
 
-	function ls(id, data, stringify)
+	function ls(id, data)
 	{
-		let r;
 		if (typeof(data) == "undefined")
 		{
-			if (id in ls.cache)
-			{
-				r = ls.cache[id];
-			}
-			else
-			{
-				r = localStorage.getItem(id);
-				if (r !== null)
-				{
-					try
-					{
-						r = JSON.parse(r);
-						ls.cache[id] = r;
-					}
-					catch(e)
-					{
-						log(e);
-						log([id, data, r]);
-					}
-				}
-			}
-			return r;
+			return ls.cache[id];
 		}
 
-		if (!(id in ls.cache))
-			ls.cache[id] = [];
-
 		ls.cache[id] = data;
-		r = ls.save(id, data, r, stringify);
-		return r;
+		return ls.save();
 	}
 	ls.cache = {};
-	ls.max = 50000;//max items to store
-	ls.safeKeys = ["options", "dl", "order"];
-	ls.save = function(id, data, r, stringify, attempt)
+	try
 	{
-		let d = data;
-		if (typeof(data) == "undefined" )
-			d = ls.cache[id];
+	  ls.cache = JSON.parse(localStorage.getItem(LSNAME)) || ls.cache;
+	}
+	catch(e)
+	{
+log(e);
+	}
+// upgrade from 1.7
+for(let i = 0, k = Object.keys(localStorage); i < k.length; i++)
+{
+	if (!k[i].match(/^[0-9]+(\-[0-9]+)?([a-z]{3,5})?$/))
+		continue;
 
-		if (typeof(stringify) == "undefined" || stringify)
-			d = JSON.stringify(d);
+  ls.cache[k[i]] = localStorage.getItem(k[i]);
+  localStorage.removeItem(k[i]);
+}
 
+localStorage.setItem(LSNAME, JSON.stringify(ls.cache));
+// end upgrade
+
+	ls.max = 2;//max items to store
+	ls.save = function(r, attempt)
+	{
 		try
 		{
-			r = localStorage.setItem(id, d);
+			r = localStorage.setItem(LSNAME, JSON.stringify(ls.cache));
 		}
 		catch(e)
 		{
 			ls.purge();
 			if (typeof(attempt) == "undefined")
 				attempt = 0;
-log([attempt, data, e]);
+log([attempt, e]);
 
 			if (attempt < 100)
-				r = ls.save(id, data, r, stringify, ++attempt);
+				return ls.save(r, ++attempt);
 
 		}
 		return r;
@@ -97,20 +85,17 @@ log([attempt, data, e]);
 	//clear database;
 	ls.purge = function()
 	{
-		let array = Object.keys(localStorage),
-				n = 0;
+		let cache = {},
+		    keys = Object.keys(ls.cache);
 
-//		while(localStorage.length > ls.max)
-		while(n < ls.max)
-		{
-			let key = array[n++];
-			if (!key.match(/^[0-9]+(\-[0-9]+)?([a-z]{3,5})?$/))
-				continue;
-
-//log("Deleting " + key + ": " + localStorage.getItem(key));
-			return localStorage.removeItem(key);
-		}
+    for(let i = 0; i < ls.max-1; i++)
+    {
+      cache[keys[i]] = ls.cache[keys[i]];
+    }
+    ls.cache = cache;
+//log(ls.cache);
 	}
+
 
 	function $$(id, node, all)
 	{
@@ -197,7 +182,7 @@ log([attempt, data, e]);
 
 	function getData(node)
 	{
-		let items = $$(".salePrice,.itemPrice,.price", node, true) || [],
+		let items = $$(".salePrice,.itemPrice,.price,.bp-p-dealCard_price", node, true) || [],
 				r = [];
 
 		for (let i = 0; i < items.length; i++)
@@ -396,17 +381,24 @@ log([attempt, data, e]);
 
 	function receiveMessage(e)
 	{
-log(arguments);
-		if ([linkResolver, "https://slickdeals.net"].indexOf(e.origin) == -1)
+//log(arguments);
+		if ([linkResolver, "https://slickdeals.net"].indexOf(e.origin) == -1 || !e.data)
 		{
-log(e);
+//log(e);
 			return;
 		}
 
-		let a,data = JSON.parse(e.data);
+		let a,data;
+		try
+		{
+		  data = JSON.parse(e.data);
+		}
+		catch(er)
+		{
+//log(er, e);
+		}
 		if (!data)
 		{
-log(e.data);
 			return;
 		}
 
@@ -418,7 +410,8 @@ log(e.data);
 			framesList[tid].iframe.parentNode.removeChild(framesList[tid].iframe);
 			framesList.i--;
 		}
-		if (data.url && !data.url.match(/^https:\/\/(www\.)?slickdeals.net/i))
+//log(data);
+		if (data.url && !data.url.match(/^https:\/\/(www\.)?slickdeals.net\/\?/i))
 		{
 			ls(data.id + data.type, d);
 			if (a = linksData[data.id])
