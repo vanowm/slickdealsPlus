@@ -3,7 +3,7 @@
 // @namespace   V@no
 // @description Various enhancements
 // @include     https://slickdeals.net/*
-// @version     1.8
+// @version     1.9
 // @run-at      document-start
 // @grant       none
 // ==/UserScript==
@@ -171,13 +171,6 @@ log([attempt, e]);
 			return node;
 
 		return findParent(node.parentNode, attr);
-	}
-
-	function multiline(func, ws)
-	{
-		func = func.toString();
-		func = func.slice(func.indexOf("/*") + 2, func.lastIndexOf("*/")).split("*//*").join("*/");
-		return ws ? func : func.replace(/[\n\t]*/g, "");
 	}
 
 	function getData(node)
@@ -437,15 +430,27 @@ log([attempt, e]);
 		window.removeEventListener('DOMContentLoaded', main, false);
 		window.removeEventListener('load', main, false);
 
+		let isDarkMode = false;
+		for (let i = 0, l = document.body.classList; i < l.length && !isDarkMode; i++)
+		{
+			isDarkMode = /darkMode/.test(l[i]);
+		}
+		document.body.classList.toggle("darkMode", isDarkMode);
 		let css = document.createElement("style");
-		css.innerHTML = multiline(function(){/*
+		css.innerHTML = `
 div.free,
 li.free
 {
 	box-shadow: 0 0 10px red;
 	background-color: #ffdde0 !important;
 }
-div.free,
+body.darkMode div.free,
+body.darkMode li.free
+{
+	box-shadow: 0 0 10px red;
+	background-color: #600000 !important;
+	color: black;
+}
 #fpMainContent .gridCategory .fpGridBox.list.free,
 #fpMainContent .gridCategory .fpGridBox.simple.free
 {
@@ -492,7 +497,7 @@ a:hover > a.origUrl
 {
 	display: inline !important;
 }
-	*/});
+`;
 		document.getElementsByTagName("head")[0].appendChild(css);
 		observer.observe(document, {
 			subtree: true,
