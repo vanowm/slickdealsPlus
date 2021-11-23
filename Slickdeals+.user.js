@@ -448,7 +448,7 @@ body.darkMode div.free,
 body.darkMode li.free
 {
 	box-shadow: 0 0 10px red;
-	background-color: #600000 !important;
+	background-color: #861614 !important;
 	color: black;
 }
 #fpMainContent .gridCategory .fpGridBox.list.free,
