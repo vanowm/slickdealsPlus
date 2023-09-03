@@ -4,6 +4,7 @@
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
 // @version      1.11
+// @license      MIT
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
