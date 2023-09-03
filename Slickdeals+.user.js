@@ -270,6 +270,7 @@ const processLinks = node =>
 		const elOrig = document.createElement("a");
 		elOrig.href = elLink._hrefOrig;
 		elOrig.className = sdp + " origUrl";
+		elOrig.title = "Original link";
 		elLink.append(elOrig);
 
 		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
