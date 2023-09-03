@@ -3,104 +3,114 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.10
+// @version      1.11
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
-(function ()
+(function (api)
 {
 if (window.top !== window.self)
 	return;
 
 const LocalStorageName = "linksCache";
 const linksData = {};
+const sdp = "sdp"; //class name indicating that the element has already been processed
 const observer = new MutationObserver(mutations =>
 {
-//		console.log("--------", mutations);
 	for (let i = 0; i < mutations.length; i++)
 	{
 		for (let n = 0; n < mutations[i].addedNodes.length; n++)
 		{
-			getData(mutations[i].addedNodes[n]);
-			fixLink(mutations[i].addedNodes[n]);
+			const node = mutations[i].addedNodes[n];
+			if (!node.classList || node.classList.contains(sdp))
+				continue;
+
+			processCards(node);
+			processLinks(node);
 		}
 	}
 });
+observer.observe(document, {
+	subtree: true,
+	childList: true
+});
 
-const ls = Object.assign(
-	(id, data) =>
+/**
+ * A function that reads and writes data to the browser's local storage.
+ * @param {string} id - The ID of the data to read or write.
+ * @param {*} [value] - The value to write to the specified ID. If not provided, the function will read the value at the specified ID.
+ * @returns void
+ */
+const SETTINGS = (() =>
+{
+	let data;
+	try
 	{
-		if ((data) === undefined)
-		{
-			return ls.cache[id];
-		}
+		data = JSON.parse(localStorage.getItem(LocalStorageName));
+	}
+	catch{}
+	if (Object.prototype.toString.call(data) !== "[object Object]")
+		data = {};
 
-		ls.cache[id] = data;
-		return ls.save();
+	const cache = new Map(Object.entries(data));
+	let timer;
+	let timeout;
+	/**
+	 * Saves the data in the cache to the browser's local storage.
+	 * @param {number} [attempt=0] - The number of times the function has attempted to save the data.
+	 */
+	const save = (attempt = 0) =>
+	{
+		clearTimeout(timeout);
+		const now = Date.now();
+		if (timer + 300 > now)
+		{
+			timeout = setTimeout(() => save(attempt), 300);
+			return;
+		}
+		try
+		{
+			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(cache)));
+		}
+		catch
+		{
+			//removing in batches
+			for(let i = 0, keys = cache.keys(), count = ++attempt; i < count; i++)
+				cache.delete(keys.next().value);
+
+			if (++attempt < 10_000)
+				return save(attempt);
+
+		}
+		timer = now;
+	};
+
+	return	new Proxy((id, value) =>
+	{
+		if (value === undefined)
+			return cache.get(id);
+
+		cache.set(id, value);
+		save();
 	},
 	{
-		cache: (() =>
+		get: (target, id) => target(id),
+		set: (target, id, value) =>
 		{
-			const returnValue = {};
-			try
-			{
-				Object.assign(returnValue, JSON.parse(localStorage.getItem(LocalStorageName)) || returnValue);
-			}
-			catch(error)
-			{
-				console.log(error);
-			}
-				// upgrade from 1.7
-			for(let i = 0, k = Object.keys(localStorage); i < k.length; i++)
-			{
-				if (!/^\d+(-\d+)?([a-z]{3,5})?$/.test(k[i]))
-					continue;
+			target(id, value);
+			return true;
+		}
+	});
+})();
 
-				returnValue[k[i]] = localStorage.getItem(k[i]);
-				localStorage.removeItem(k[i]);
-			}
-			localStorage.setItem(LocalStorageName, JSON.stringify(returnValue));
-				// end upgrade
-			return returnValue;
-		})(),
-
-		max: 2,//max items to store
-		save: function (r, attempt)
-		{
-			try
-			{
-				r = localStorage.setItem(LocalStorageName, JSON.stringify(ls.cache));
-			}
-			catch(error)
-			{
-				ls.purge();
-				if ((attempt) === undefined)
-					attempt = 0;
-				console.log([attempt, error]);
-
-				if (attempt < 100)
-					return ls.save(r, ++attempt);
-
-			}
-			return r;
-		},
-			//clear database;
-		purge: function ()
-		{
-			const cache = {};
-			const keys = Object.keys(ls.cache);
-
-			for(let i = 0; i < ls.max - 1; i++)
-			{
-				cache[keys[i]] = ls.cache[keys[i]];
-			}
-			ls.cache = cache;
-		//console.log(ls.cache);
-		},
-	}
-);
-
+/**
+ * Returns the first element that is a descendant of node that matches selectors.
+ * @param {string} id - The ID of the element to find.
+ * @param {HTMLElement} node - The root node to search for the element.
+ * @param {boolean} all - Whether to return all elements that match the selector.
+ * @returns {HTMLElement|NodeList} The first element that matches the selector, or a NodeList of all elements that match the selector.
+ */
 const $$ = (id, node, all) =>
 {
 	try
@@ -120,180 +130,183 @@ const $$ = (id, node, all) =>
 	{}
 };
 
-const trim = t =>
+/**
+ * Trims whitespace from a given string.
+ * @param {string} t - The string to trim.
+ * @returns {string} The trimmed string.
+ */
+const trim = t => ("" + t).trim();
+
+/**
+ * Divides a price by a specified divider and formats it as a string with a dollar sign and two decimal places.
+ * @param {string} text - The text to prepend to the formatted price.
+ * @param {string} divider - The value to divide the price by.
+ * @param {string} price - The price to divide and format.
+ * @returns {string} The formatted price with the specified text prepended to it.
+ */
+const priceDivide = (text, divider, price) => "$" + (Number.parseFloat(price.replace(/,/g, "") / Number.parseFloat(divider))).toFixed(2);
+
+/**
+ * Extracts pricing information from a given node and its children.
+ * @param {HTMLElement} node - The root node to search for pricing information.
+ * @returns {Array} An array of objects containing pricing information for each item found.
+ */
+const processCards = node =>
 {
-	if (!t)
-		return "" + t;
+	const nlItems = $$(`.salePrice:not(.${sdp}),.itemPrice:not(.${sdp}),.price:not(.${sdp}),.bp-p-dealCard_price:not(.${sdp}),.dealCard__price:not(.${sdp})`, node, true) || [];
+	// const result = [];
 
-	return ("" + t).trim();
-};
-
-const findParent = (node, attribute) =>
-{
-	attribute = attribute || {tagName: "LI"};
-	if (!node)
-		return node;
-
-	let found = true;
-	for(const i in attribute)
+	for (let i = 0; i < nlItems.length; i++)
 	{
-		if (i === "classList")
-		{
-			for(let c = 0; c < attribute[i].length; c++)
-			{
-				if (!node.classList.contains(attribute[i][c]))
-				{
-					found = false;
-					break;
-				}
-			}
-		}
-		else if (typeof(attribute[i]) === "object")
-		{
-			for(const a in attribute[i])
-			{
-				if (node[i][a] !== attribute[i][a])
-				{
-					found = false;
-					break;
-				}
-			}
-		}
-		else
-		{
-			found = node[i] === attribute[i];
-		}
-		if (!found)
-		{
-			break;
-		}
-	}
-	if (found)
-		return node;
-
-	return findParent(node.parentNode, attribute);
-};
-
-const getData = node =>
-{
-	const items = $$(".salePrice,.itemPrice,.price,.bp-p-dealCard_price,.dealCard__price", node, true) || [];
-	const r = [];
-
-	for (let i = 0; i < items.length; i++)
-	{
-		const itemPrice = items[i];
-		const parent = itemPrice.parentNode;
-		const price = trim(itemPrice.textContent);
+		const elItem = nlItems[i];
+		elItem.classList.add(sdp);
+		const elParent = elItem.parentNode;
+		const price = trim(elItem.textContent);
 		const priceFree = price && price.match(/or free/i);
-		// eslint-disable-next-line unicorn/no-nested-ternary
-		const priceNew = price ? ((price.toLowerCase() === "free") ? 0 : (/^\$/.test(price) ? Number.parseFloat(price.replace(/[^\d.]/g, "")) : Number.NaN)) : Number.NaN;
-		const priceRetail = Number.parseFloat(trim(($$(".retailPrice", parent) || {}).textContent).replace(/^\$([\d.]+)/g, "$1"));
-		const priceOld = Number.parseFloat(trim(($$(".oldListPrice", parent) || {}).textContent).replace(/^\$([\d.]+)/g, "$1"));
-		const item = findParent(parent)
-			|| findParent(parent, {tagName: "DIV", dataset: {type: "fpdeal"}})
-			|| findParent(parent, {tagName: "DIV", classList: ["resultRow"]})
-			|| findParent(parent, {tagName: "DIV", dataset: {role: "frontpageDealContent"}});
+		let priceNew = Number.NaN;
+		if (price)
+		{
+			if ((price.toLowerCase() === "free"))
+				priceNew = 0;
+			else if (/^[\s\w]*\$/.test(price))
+			{
+				priceNew = Number.parseFloat(price
+					.replace(/^(\d+) for \$?([\d,.]+)/g, priceDivide) // 2 for $10
+					.replace(/[^\d,.]/g, "") // remove non-numeric characters
+					.replace(/,/g, "")); // remove commas
+			}
 
-		item && item.classList.toggle("free", (priceNew === 0 || priceFree) ? true : false);
+		}
+		const priceRetail = Number.parseFloat(trim(($$(".retailPrice", elParent) || {}).textContent)
+			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
+			.replace(/,/g, ""));
+		const priceOld = Number.parseFloat(trim(($$(".oldListPrice, .dealCard__originalPrice", elParent) || {}).textContent)
+			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
+			.replace(/,/g, ""));
+		const priceDifference = (priceOld || priceRetail) - priceNew;
+		const priceDealPercent = Math.round(priceDifference * 100 / (priceOld || priceRetail));
+		const elCard = elParent.closest(
+			"li," +
+			"div[data-type='fpdeal']," +
+			"div.resultRow," +
+			"div[data-role='frontpageDealContent']"
+		);
+		if (elCard)
+			elCard.classList.toggle("free", Boolean(priceNew === 0 || priceFree));
 
-		r[r.length] = {
-			item: item,
-			price: price,
-			priceNew : priceNew,
-			priceRetail: priceRetail,
-			priceOld: priceOld
-		};
+		if (!Number.isNaN(priceDealPercent))
+		{
+			const diff = priceDifference.toFixed(2).replace(/\.00$/, "");
+			elParent.dataset.dealDiff = diff;
+			elCard.dataset.dealDiff = diff;
+			elParent.dataset.dealPercent = priceDealPercent;
+			elCard.dataset.dealPercent = priceDealPercent;
+		}
+		// result.push({
+		// 	item: item,
+		// 	price: price,
+		// 	priceNew : priceNew,
+		// 	priceRetail: priceRetail,
+		// 	priceOld: priceOld
+		// });
 
-	//console.log(price, priceNew, priceRetail, priceOld, itemPrice, item);
+		// console.log(price, priceNew, priceRetail, priceOld, priceDealPercent, elItem, elCard);
 	}
-	return r;
+	// return result;
 };
 
+/**
+ * Extracts the ID and type of a deal from a given URL.
+ * @param {string} url - The URL to extract the ID and type from.
+ * @returns {Object|boolean} An object containing the ID and type of the deal, or false if no ID or type could be found.
+ */
 const getIdFromUrl = url =>
 {
-	const q = ["pno", "tid", "sdtid"];
-	const c = {
+	const ids = ["pno", "tid", "sdtid"];
+	const queryConvert = {
 		sdtid : "tid"
 	};
-	let m;
+	let matchIDS;
 
-	for (let t = 0; t < q.length; t++)
+	for (let i = 0; i < ids.length; i++)
 	{
-		const r = new RegExp("(\\?|(&|&amp;))((" + q[t] + ")=([^&]+))", "i");
-		if ((m = url.match(r)))
+		// const r = new RegExp("(\\?|(&|&amp;))((" + ids[i] + ")=([^&]+))", "i");
+		matchIDS = new RegExp("(\\?|(&|&amp;))((" + ids[i] + ")=([^&]+))", "i").exec(url);//url.match(r);
+		if (matchIDS)
 			break;
 	}
-	if (!m)
+	if (!matchIDS)
 		return false;
 
-	m[4] = c[m[4]] || m[4];
-	const i = url.match(/(\?|(&|&amp;))lno=(\d+)/i);
-	if (i)
-		m[5] += "-" + i[3];
-	return {id: m[5], type: m[4]};
+	matchIDS[4] = queryConvert[matchIDS[4]] || matchIDS[4];
+	const matchLNO = url.match(/(\?|(&|&amp;))lno=(\d+)/i);
+	if (matchLNO)
+		matchIDS[5] += "-" + matchLNO[3];
+	return {id: matchIDS[5], type: matchIDS[4]};
 };
 
-const fixLink = node =>
+/**
+ * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
+ * @param {HTMLElement} node - The root node to search for links to fix.
+ */
+const processLinks = node =>
 {
-	const links = $$("a", node, true);
-	if (!links)
-		return;
-
-	for(let i = 0; i < links.length; i++)
+	const nlLinks = $$(`a:not(.${sdp})`, node, true) || [];
+	for(let i = 0; i < nlLinks.length; i++)
 	{
-		const a = links[i];
-		if ("_href" in a)
+		const elLink = nlLinks[i];
+
+		elLink.classList.add(sdp);
+		const {id, type} = getIdFromUrl(elLink.href) || {};
+		if (!id)
 			continue;
 
-		a._href = a.href;
-			// a.dataset.href = a.href;
-		const m = getIdFromUrl(a.href);
-		if (!m)
-			continue;
+		elLink._hrefOrig = elLink.href;
+		const elOrig = document.createElement("a");
+		elOrig.href = elLink._hrefOrig;
+		elOrig.className = sdp + " origUrl";
+		elLink.append(elOrig);
 
-		const aOrig = document.createElement("a");
-		aOrig.href = a._href;
-		aOrig.className = "origUrl";
-		a.append(aOrig);
-
-		const id = m.id;
-		const type = m.type;
-		const u = a.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
-		let url = u ? decodeURIComponent(u[2]) : ls(id + type);
+		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
+		let url = u ? decodeURIComponent(u[2]) : SETTINGS(id + type);
 
 		if (url)
 		{
 			if (typeof(url) === "object")
 				url = url[0];
 
-			linkUpdate(a, url);
+			linkUpdate(elLink, url);
 			continue;
 		}
-		if (!a._resolved)
+		if (!elLink._resolved)
 		{
-			a.classList.toggle("alert", true);
-			a.classList.toggle("successBtn", false);
+			elLink.classList.toggle("alert", true);
+			elLink.classList.toggle("successBtn", false);
 		}
 		if (!linksData[id])
 		{
-			linksData[id] = [a];
-			resolveUrl(id, type, a._href);
+			linksData[id] = [elLink];
+			resolveUrl(id, type, elLink._hrefOrig);
 		}
-		if (!linksData[id].includes(a))
-			linksData[id][linksData[id].length] = a;
+		if (!linksData[id].includes(elLink))
+			linksData[id].push(elLink);
 	}
 };
 
-// eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point
-const source = "szdcogvyz19rw0m0zar17qjyux7mlr".match(/.{1,6}/g).reduce((a,b,c,d)=>(c=parseInt(b,36),[24,16,8,0].forEach(b=>(d=c>>b&255,d&&(a+=String.fromCharCode(d)))),a),"");
-
-const resolveUrl = (id, type, url) => fetch(source + "?" + id + "&t=" + type + "&u=" + encodeURIComponent(url))
+/**
+ * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
+ * @param {string} id - The ID of the deal to resolve.
+ * @param {string} type - The type of the deal to resolve.
+ * @param {string} url - The URL to resolve.
+ * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
+ */
+const resolveUrl = (id, type, url) => fetch( api + id + "?t=" + type + "&u=" + encodeURIComponent(url) + "&r=" + encodeURIComponent(location.href),{referrerPolicy: "unsafe-url"})
 	.then(r => r.json())
 	.then(data =>
 	{
 		if (data.url && !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
 		{
-			ls(data.id + data.type, data.url);
+			SETTINGS(data.id + data.type, data.url);
 			const aLinks = linksData[data.id] || [];
 			for(let i = 0; i < aLinks.length; i++)
 				linkUpdate(aLinks[i], data.url);
@@ -302,15 +315,22 @@ const resolveUrl = (id, type, url) => fetch(source + "?" + id + "&t=" + type + "
 	})
 	.catch(console.error);
 
+/**
+ * Updates a link with a new URL and styling to indicate that it has been resolved.
+ * @param {HTMLAnchorElement} a - The link to update.
+ * @param {string} url - The new URL to set on the link.
+ */
 const linkUpdate = (a, url) =>
 {
 	a._resolved = true;
 	a.href = url;
-	a._hrefNew = url;
 	a.classList.toggle("successBtn", true);
 	a.classList.toggle("alert", false);
 };
 
+/**
+ * The main function that runs when the page is loaded.
+ */
 const main = () =>
 {
 	window.removeEventListener("DOMContentLoaded", main, false);
@@ -319,13 +339,11 @@ const main = () =>
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
 	document.body.classList.toggle("darkMode", isDarkMode);
-	const css = document.createElement("style");
-	css.id = "slickdealsPlus";
-	css.innerHTML = `
+	const style = document.createElement("style");
+	style.innerHTML = `
 .successBtn
 {
 	--buttonBackgroundColor: #14F572;
-	color
 }
 .seeDealButton.successBtn:not(:hover):not(:active)
 {
@@ -353,7 +371,7 @@ body.darkMode li.free
 {
 	box-shadow: 0 0 10px red;
 	background-color: #861614 !important;
-	color: black;
+	/* color: black; */
 }
 #fpMainContent .gridCategory .fpGridBox.list.free,
 #fpMainContent .gridCategory .fpGridBox.simple.free
@@ -381,22 +399,43 @@ body.darkMode li.free
 a.origUrl
 {
 	position: relative;
-	width: 1em;
 	height: 1em;
 	display: none !important;
 }
-a.origUrl:before
+
+a.origUrl::before,
+a.origUrl::after
 {
+	content: "";
 	position: absolute;
-	width: 1em;
-	height: 1em;
-	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZlcnNpb249IjEuMCIgdmlld0JveD0iMCAwIDI0LjcgMjQuNyI+PGRlZnMvPjxwYXRoIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRiIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0zLjIgMjEuNmgwYTQgNCAwIDAxMC01LjdMNiAxMy4xYTQgNCAwIDAxNS43IDBoMGE0IDQgMCAwMTAgNS43bC0yLjggMi44YTQuMiA0LjIgMCAwMS01LjcgMHpNMTMuMSAxMS43aDBhNCA0IDAgMDEwLTUuN2wyLjgtMi44YTQgNCAwIDAxNS43IDBoMGE0IDQgMCAwMTAgNS43bC0yLjggMi44YTQuMiA0LjIgMCAwMS01LjcgMHoiIG9wYWNpdHk9Ii41Ii8+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iMiIgZD0iTTMuMiAyMS42aDBhNCA0IDAgMDEwLTUuN0w2IDEzLjFhNCA0IDAgMDE1LjcgMGgwYTQgNCAwIDAxMCA1LjdsLTIuOCAyLjhhNC4yIDQuMiAwIDAxLTUuNyAwek0xMy4xIDExLjdoMGE0IDQgMCAwMTAtNS43bDIuOC0yLjhhNCA0IDAgMDE1LjcgMGgwYTQgNCAwIDAxMCA1LjdsLTIuOCAyLjhhNC4yIDQuMiAwIDAxLTUuNyAweiIvPjxwYXRoIHN0cm9rZT0iI0ZGRiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbWl0ZXJsaW1pdD0iMTAiIHN0cm9rZS13aWR0aD0iNCIgZD0iTTE2LjYgOC4xbC04LjUgOC41IiBvcGFjaXR5PSIuNSIvPjxwYXRoIHN0cm9rZT0iI0ZGRiIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjQiIGQ9Ik0xNC4zIDEwLjRsLTMuOSAzLjkiLz48cGF0aCBmaWxsPSIjMDA3QUZGIiBzdHJva2U9IiMwMDAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLW1pdGVybGltaXQ9IjEwIiBzdHJva2Utd2lkdGg9IjIiIGQ9Ik0xNi42IDguMWwtOC41IDguNSIvPjwvc3ZnPg==");
+	height: 1.3em;
+	top: -0.1em;
+
+}
+
+a.origUrl::after
+{
+	width: 3em;
+}
+
+a.origUrl::before
+{
+	width: 1.3em;
+	border-radius: 0.5em;
+	background-color: #ffffff7f;
+	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9ImN1cnJlbnRDb2xvciIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pbllNaW4gbWVldCIgdmlld0JveD0iMCAwIDEwIDExIj4KICA8cGF0aCBmaWxsPSJpbmhlcml0IiBkPSJtOC40NjUuNTQ2Ljk5Ljk5YTEuODcgMS44NyAwIDAgMS0uMDAyIDIuNjRsLTEuMzIgMS4zMmExLjQxMiAxLjQxMiAwIDAgMS0xLjUyNS4zMDMuNDY3LjQ2NyAwIDAgMSAuMzU3LS44NjJjLjE3NC4wNy4zNzQuMDMuNTA5LS4xMDJsMS4zMjEtMS4zMTdhLjkzMy45MzMgMCAwIDAgMC0xLjMybC0uOTktLjk5YS45MzMuOTMzIDAgMCAwLTEuMzIgMGwtMS4zMiAxLjMyYS40NjcuNDY3IDAgMCAwLS4xLjUwNi40NjcuNDY3IDAgMSAxLS44NjMuMzU3IDEuNDAzIDEuNDAzIDAgMCAxIC4zMDMtMS41MjZsMS4zMi0xLjMyYTEuODcgMS44NyAwIDAgMSAyLjY0IDBaIi8+CiAgPHBhdGggZmlsbD0iaW5oZXJpdCIgZD0iTTMuMDIgNi45OGEuNDcuNDcgMCAwIDAgLjY2IDBsMy42My0zLjYzYS40NjcuNDY3IDAgMCAwLS42Ni0uNjZMMy4wMiA2LjMyYS40NjcuNDY3IDAgMCAwIDAgLjY2WiIvPgogIDxwYXRoIGZpbGw9ImluaGVyaXQiIGQ9Ik01LjE5IDYuMzU3YS40NjcuNDY3IDAgMCAwLS4yNTMuNjEuNDY3LjQ2NyAwIDAgMS0uMTAyLjUwOGwtMS4zMiAxLjMyYS45MzMuOTMzIDAgMCAxLTEuMzIgMGwtLjk5LS45OWEuOTMzLjkzMyAwIDAgMSAwLTEuMzJsMS4zMjItMS4zMmEuNDczLjQ3MyAwIDAgMSAuNTEtLjEuNDY3LjQ2NyAwIDAgMCAuMzU1LS44NjQgMS40MTYgMS40MTYgMCAwIDAtMS41MjUuMzA1TC41NDYgNS44MjZhMS44NyAxLjg3IDAgMCAwIDAgMi42NGwuOTkuOTljLjcyOS43MjggMS45MS43MjggMi42NCAwbDEuMzItMS4zMmMuNC0uNDAxLjUyLTEuMDAzLjMwMy0xLjUyN2EuNDY3LjQ2NyAwIDAgMC0uNjEtLjI1MloiLz4KPC9zdmc+");
 	background-position: center;
 	background-repeat: no-repeat;
-	padding: 0.3em;
-	content: "";
-	top: 0.2em;
+	padding: 0.5em 1em;
+	left: .5em;
+	opacity: 0.5;
 }
+
+a.origUrl:hover::before
+{
+	opacity: 1;
+}
+
 a:hover > a.origUrl
 {
 	display: inline !important;
@@ -437,42 +476,47 @@ a:hover > a.origUrl
   width: 1em;
   line-height: 1em;
 }
+
+.dealCard__priceContainer
+{
+	display: unset !important;
+}
+
+a[data-deal-diff]::after
+{
+	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
+	font-style: italic;
+}
 `;
-	document.head.append(css);
+	document.head.append(style);
 	const elInput = document.createElement("input");
 	elInput.type = "checkbox";
 	elInput.id = "freeOnly";
-	elInput.checked = ls("freeOnly");
+	elInput.checked = SETTINGS.freeOnly;
+	elInput.addEventListener("input", () => SETTINGS("freeOnly", elInput.checked));
 	document.body.insertBefore(elInput, document.body.firstChild);
-	elInput.addEventListener("input", () => ls("freeOnly", elInput.checked));
-	console.log("slickdeals+");
-	const header = document.querySelector(".slickdealsHeaderSubNav__items");
-	if (header)
+	const elHeader = $$(".slickdealsHeaderSubNav__items");
+	if (elHeader)
 	{
 			// header.firstChild.firstChild.style.padding = 0;
-		const label = document.createElement("label");
-		label.setAttribute("for", "freeOnly");
-		label.className = "freeonly headingRight";
-		const box = document.createElement("li");
-		box.className = "slickdealsHeaderSubNav__item";
-		box.append(label);
-		header.insertBefore(box, header.children[1]);
+		const elLabel = document.createElement("label");
+		elLabel.setAttribute("for", "freeOnly");
+		elLabel.className = "freeonly headingRight";
+		elLabel.title = "Free Only";
+		const elLi = document.createElement("li");
+		elLi.className = "slickdealsHeaderSubNav__item";
+		elLi.append(elLabel);
+		elHeader.insertBefore(elLi, elHeader.children[1]);
 	}
-	getData(document);
-	fixLink(document);
-	observer.observe(document, {
-		subtree: true,
-		childList: true
-	});
+	console.log("slickdeals+ initialized");
 };//main()
 
 if (document.readyState === "complete")
-{
 	main();
-}
 else
 {
 	window.addEventListener("DOMContentLoaded", main, false);
 	window.addEventListener("load", main, false);
 }
-})();
+// eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point
+})("5s6gps68sr1m6j2mfzr02xj92zp02t83c037a8ri2t9o8yq8o932991a66m6k12m".match(/../g).reduce((a,b,c)=>a=[a[0]+String.fromCharCode((c=parseInt(b,36))/a[1]),c%9+1],["",2])[0]);
