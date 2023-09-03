@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.11
+// @version      1.12
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -11,6 +11,7 @@
 
 (function (api)
 {
+"use strict";
 if (window.top !== window.self)
 	return;
 
@@ -495,11 +496,12 @@ a[data-deal-diff]::after /* deal list page */
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
 }
-.dealDetailsPriceInfo[data-deal-diff]::after /* deal details page */
-{
-
+@media (min-width: 768px) {
+	.dealCard__content {
+		grid-template-rows:auto 67px auto 1fr 20px !important;
+	}
 }
-`;
+	`;
 	document.head.append(style);
 	const elInput = document.createElement("input");
 	elInput.type = "checkbox";
