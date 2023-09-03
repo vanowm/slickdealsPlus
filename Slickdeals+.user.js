@@ -153,7 +153,7 @@ const priceDivide = (text, divider, price) => "$" + (Number.parseFloat(price.rep
  */
 const processCards = node =>
 {
-	const nlItems = $$(`.salePrice:not(.${sdp}),.itemPrice:not(.${sdp}),.price:not(.${sdp}),.bp-p-dealCard_price:not(.${sdp}),.dealCard__price:not(.${sdp})`, node, true) || [];
+	const nlItems = $$(`.salePrice:not(.${sdp}),.itemPrice:not(.${sdp}),.price:not(.${sdp}),.bp-p-dealCard_price:not(.${sdp}),.dealCard__price:not(.${sdp}), .dealPrice:not(.${sdp})`, node, true) || [];
 	// const result = [];
 
 	for (let i = 0; i < nlItems.length; i++)
@@ -198,9 +198,12 @@ const processCards = node =>
 		{
 			const diff = priceDifference.toFixed(2).replace(/\.00$/, "");
 			elParent.dataset.dealDiff = diff;
-			elCard.dataset.dealDiff = diff;
 			elParent.dataset.dealPercent = priceDealPercent;
-			elCard.dataset.dealPercent = priceDealPercent;
+			if (elCard)
+			{
+				elCard.dataset.dealDiff = diff;
+				elCard.dataset.dealPercent = priceDealPercent;
+			}
 		}
 		// result.push({
 		// 	item: item,
@@ -481,11 +484,19 @@ a:hover > a.origUrl
 {
 	display: unset !important;
 }
-
-a[data-deal-diff]::after
+.dealDetailsPriceInfo[data-deal-diff]
+{
+	position: relative;
+}
+.dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
+a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
+}
+.dealDetailsPriceInfo[data-deal-diff]::after /* deal details page */
+{
+
 }
 `;
 	document.head.append(style);
