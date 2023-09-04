@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.13
+// @version      1.13.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -770,4 +770,4 @@ else
 	window.addEventListener("load", main, false);
 }
 // eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point
-})("5s6gps68sr1m6j2mfzr02xj92zp02t83c037a8ri2t9o8yq8o932991a66m6k12m".match(/../g).reduce((a,b,c)=>a=[a[0]+String.fromCharCode((c=parseInt(b,36))/a[1]),c%9+1],["",2])[0]);
+})("szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((a,b,c,d)=>(c=parseInt(b,36),[24,16,8,0].forEach(b=>(d=c>>b&255,a+=String.fromCharCode(d))),a),""));
