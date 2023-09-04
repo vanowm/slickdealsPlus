@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.13.1
+// @version      1.14
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -104,8 +104,8 @@ const SETTINGS = (() =>
 		}
 		catch
 		{
-			//removing in batches
-			for(let i = 0, key, keys = cache.keys(), count = ++attempt * 10; i < count; i++)
+			//removing in batches exponentially
+			for(let i = 0, key, keys = cache.keys(), count = ++attempt ** 2; i < count; i++)
 			{
 				do
 				{
@@ -116,7 +116,7 @@ const SETTINGS = (() =>
 				cache.delete(key);
 			}
 
-			if (++attempt < 10_000)
+			if (attempt < 10_000)
 				return save(attempt);
 
 		}
@@ -131,7 +131,7 @@ const SETTINGS = (() =>
 		cache.set(id, value);
 		if (id === "resolvedShow" || id === "resolvedClick")
 		{
-			updateLinks(value);
+			updateLinks();
 		}
 		save();
 	},
@@ -145,16 +145,14 @@ const SETTINGS = (() =>
 	});
 })();
 
-const updateLinks = show =>
+const updateLinks = () =>
 {
 	for(const id in linksData)
 	{
 		const aLinks = linksData[id];
 		for(let i = 0; i < aLinks.length; i++)
 		{
-			const elLink = aLinks[i];
-			linkUpdate(elLink, undefined, true);
-
+			linkUpdate(aLinks[i], undefined, true);
 		}
 	}
 };
@@ -319,7 +317,7 @@ const processLinks = (node, force) =>
 			continue;
 
 		elLink.classList.add(processedMarker);
-		const {id, type} = getIdFromUrl(elLink.href) || {};
+		const {id, type} = getUrlInfo(elLink.href) || {};
 		if (!id)
 			continue;
 
@@ -427,7 +425,7 @@ const linkUpdate = (elA, url, update) =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
-const resolveUrl = (id, type, url) => fetch( api + id + "?t=" + type + "&u=" + encodeURIComponent(url) + "&r=" + encodeURIComponent(location.href),{referrerPolicy: "unsafe-url"})
+const resolveUrl = (id, type, url) => fetch(api + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r.json())
 	.then(data =>
 	{
@@ -447,7 +445,7 @@ const resolveUrl = (id, type, url) => fetch( api + id + "?t=" + type + "&u=" + e
  * @param {string} url - The URL to extract the ID and type from.
  * @returns {Object|boolean} An object containing the ID and type of the deal, or false if no ID or type could be found.
  */
-const getIdFromUrl = url =>
+const getUrlInfo = url =>
 {
 	const ids = ["pno", "tid", "sdtid"];
 	const queryConvert = {
@@ -744,7 +742,14 @@ a[data-deal-diff]::after /* deal list page */
 		// elBefore.before(elLi);
 		elHeader.append(elLi);
 	}
-	console.log("slickdeals+ initialized");
+	//for some reason observer failed to process everything while page is still loading, so we do it manually
+	const elPageContent = $$("pageContent");
+	if (elPageContent)
+	{
+		processCards(elPageContent);
+		processLinks(elPageContent);
+	}
+	console.log(GM_info.script.name, "v" + GM_info.script.version, "initialized");
 };//main()
 
 const checkbox = id =>
@@ -770,4 +775,4 @@ else
 	window.addEventListener("load", main, false);
 }
 // eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point
-})("szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((a,b,c,d)=>(c=parseInt(b,36),[24,16,8,0].forEach(b=>(d=c>>b&255,a+=String.fromCharCode(d))),a),""));
+})("szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Ⲟ,ꓳ,𐊒)=>([24,16,8,0].forEach(𐓂=>(𐊒=parseInt(ꓳ,36)>>𐓂&255,Ⲟ+=String.fromCharCode(𐊒))),Ⲟ),""));
