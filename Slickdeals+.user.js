@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.12
+// @version      1.13
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -15,25 +15,46 @@
 if (window.top !== window.self)
 	return;
 
-const LocalStorageName = "linksCache";
+const LocalStorageName = "slickdeals+";
+// upgrade from v1.12
+{
+	const oldData = localStorage.getItem("linksCache");
+	if (oldData)
+	{
+		localStorage.setItem(LocalStorageName, oldData);
+		localStorage.removeItem("linksCache");
+	}
+}
 const linksData = {};
-const sdp = "sdp"; //class name indicating that the element has already been processed
-const observer = new MutationObserver(mutations =>
+const processedMarker = "sdp"; //class name indicating that the element has already been processed
+
+/**
+ * Track changes in the DOM
+ */
+new MutationObserver(mutations =>
 {
 	for (let i = 0; i < mutations.length; i++)
 	{
+		// do we need to worry about tracked links being changed?
+		// if (mutations[i].type === "attributes")
+		// {
+		// 	const el = mutations[i].target;
+		// 	//the tracking links can change dynamically, update them if they do
+		// 	if (el._hrefResolved && el.href !== el._hrefResolved && el.href !== el._hrefOrig)
+		// 		linkUpdate(el, el.href, true);
+		// }
 		for (let n = 0; n < mutations[i].addedNodes.length; n++)
 		{
 			const node = mutations[i].addedNodes[n];
-			if (!node.classList || node.classList.contains(sdp))
+			if (!node.classList || node.classList.contains(processedMarker))
 				continue;
 
 			processCards(node);
 			processLinks(node);
 		}
 	}
-});
-observer.observe(document, {
+}).observe(document, {
+	// attributeFilter: ["href"],
 	subtree: true,
 	childList: true
 });
@@ -46,14 +67,19 @@ observer.observe(document, {
  */
 const SETTINGS = (() =>
 {
-	let data;
+	const dataDefault = {
+		freeOnly: 0, /* show free only */
+		resolvedShow: 1, /* show resolved links */
+		resolvedClick: 0 /* use resolved links on click */
+	};
+	let data = Object.assign({}, dataDefault);
 	try
 	{
-		data = JSON.parse(localStorage.getItem(LocalStorageName));
+		Object.assign(data, JSON.parse(localStorage.getItem(LocalStorageName)));
 	}
 	catch{}
 	if (Object.prototype.toString.call(data) !== "[object Object]")
-		data = {};
+		data = Object.assign({}, dataDefault);
 
 	const cache = new Map(Object.entries(data));
 	let timer;
@@ -73,13 +99,22 @@ const SETTINGS = (() =>
 		}
 		try
 		{
+			// try save settings, if it fails, remove previous items until it succeeds
 			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(cache)));
 		}
 		catch
 		{
 			//removing in batches
-			for(let i = 0, keys = cache.keys(), count = ++attempt; i < count; i++)
-				cache.delete(keys.next().value);
+			for(let i = 0, key, keys = cache.keys(), count = ++attempt * 10; i < count; i++)
+			{
+				do
+				{
+					key = keys.next().value;
+				}
+				while(key && !/^\d/.test(key)); //don't remove non-numeric keys
+
+				cache.delete(key);
+			}
 
 			if (++attempt < 10_000)
 				return save(attempt);
@@ -94,6 +129,10 @@ const SETTINGS = (() =>
 			return cache.get(id);
 
 		cache.set(id, value);
+		if (id === "resolvedShow" || id === "resolvedClick")
+		{
+			updateLinks(value);
+		}
 		save();
 	},
 	{
@@ -105,6 +144,20 @@ const SETTINGS = (() =>
 		}
 	});
 })();
+
+const updateLinks = show =>
+{
+	for(const id in linksData)
+	{
+		const aLinks = linksData[id];
+		for(let i = 0; i < aLinks.length; i++)
+		{
+			const elLink = aLinks[i];
+			linkUpdate(elLink, undefined, true);
+
+		}
+	}
+};
 
 /**
  * Returns the first element that is a descendant of node that matches selectors.
@@ -153,18 +206,23 @@ const priceDivide = (text, divider, price) => "$" + (Number.parseFloat(price.rep
  * @param {HTMLElement} node - The root node to search for pricing information.
  * @returns {Array} An array of objects containing pricing information for each item found.
  */
-const processCards = node =>
+const processCards = (node, force) =>
 {
-	const nlItems = $$(`.salePrice:not(.${sdp}),.itemPrice:not(.${sdp}),.price:not(.${sdp}),.bp-p-dealCard_price:not(.${sdp}),.dealCard__price:not(.${sdp}), .dealPrice:not(.${sdp})`, node, true) || [];
+	const processed = (force ? "-" : "") + processedMarker;
+	const nlItems = $$(	`.salePrice:not(.${processed}),` +
+						`.itemPrice:not(.${processed}),` +
+						`.price:not(.${processed}),` +
+						`.bp-p-dealCard_price:not(.${processed}),` + // https://slickdeals.net/deals/watches/
+						`.dealCard__price:not(.${processed}),` +
+						`.dealPrice:not(.${processed})`
+	, node, true) || [];
 	// const result = [];
-
 	for (let i = 0; i < nlItems.length; i++)
 	{
-		const elItem = nlItems[i];
-		elItem.classList.add(sdp);
-		const elParent = elItem.parentNode;
-		const price = trim(elItem.textContent);
-		const priceFree = price && price.match(/or free/i);
+		const elPrice = nlItems[i];
+		elPrice.classList.add(processedMarker);
+		let elParent = elPrice.parentNode;
+		const price = trim(elPrice.textContent);
 		let priceNew = Number.NaN;
 		if (price)
 		{
@@ -179,12 +237,32 @@ const processCards = node =>
 			}
 
 		}
-		const priceRetail = Number.parseFloat(trim(($$(".retailPrice", elParent) || {}).textContent)
+		const priceFree = price && price.match(/or free/i) || priceNew === 0;
+		const elPriceRetail = $$(".retailPrice", elParent);
+		const elPriceOld = $$(".oldListPrice, .dealCard__originalPrice, .bp-p-dealCard_originalPrice", elParent);
+		// make sure price element is in it's own wrapper
+		if (elParent.matches(".bp-c-card_content, .dealDetailsPriceInfo"))
+		{
+			const elWrapper = document.createElement("div");
+			elWrapper.className = "cardPriceInfo";
+			elWrapper.append(elPrice);
+			if (elPriceOld)
+				elWrapper.append(elPriceOld);
+
+			if (elPriceRetail)
+				elWrapper.append(elPriceRetail);
+
+			elParent.prepend(elWrapper);
+			elParent = elWrapper;
+		}
+		const priceRetail = Number.parseFloat(trim((elPriceRetail || {}).textContent)
 			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
 			.replace(/,/g, ""));
-		const priceOld = Number.parseFloat(trim(($$(".oldListPrice, .dealCard__originalPrice", elParent) || {}).textContent)
+
+		const priceOld = Number.parseFloat(trim((elPriceOld || {}).textContent)
 			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
 			.replace(/,/g, ""));
+
 		const priceDifference = (priceOld || priceRetail) - priceNew;
 		const priceDealPercent = Math.round(priceDifference * 100 / (priceOld || priceRetail));
 		const elCard = elParent.closest(
@@ -194,7 +272,12 @@ const processCards = node =>
 			"div[data-role='frontpageDealContent']"
 		);
 		if (elCard)
-			elCard.classList.toggle("free", Boolean(priceNew === 0 || priceFree));
+		{
+			if (priceFree)
+				elCard.setAttribute("free", "");
+			else
+				elCard.removeAttribute("free");
+		}
 
 		if (!Number.isNaN(priceDealPercent))
 		{
@@ -215,10 +298,149 @@ const processCards = node =>
 		// 	priceOld: priceOld
 		// });
 
-		// console.log(price, priceNew, priceRetail, priceOld, priceDealPercent, elItem, elCard);
+		// console.log({price, priceNew, priceRetail, priceOld, priceDealPercent, elItem, elCard});
 	}
 	// return result;
 };
+
+/**
+ * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
+ * @param {HTMLElement} node - The root node to search for links to fix.
+ */
+const processLinks = (node, force) =>
+{
+	const processed = (force ? "-" : "") + processedMarker;
+	const nlLinks = $$(`a:not(.${processed})`, node, true) || [];
+	for(let i = 0; i < nlLinks.length; i++)
+	{
+		const elLink = nlLinks[i];
+
+		if (elLink._hrefResolved)
+			continue;
+
+		elLink.classList.add(processedMarker);
+		const {id, type} = getIdFromUrl(elLink.href) || {};
+		if (!id)
+			continue;
+
+		elLink._hrefOrig = elLink.href;
+		const elHover = document.createElement("a");
+		elHover.href = elLink._hrefOrig;
+		elHover.classList.add(processedMarker, "origUrl");
+		elHover.title = "Original link";
+		elHover.target = elLink.target;
+		elLink.append(elHover);
+
+		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
+		let url = u ? decodeURIComponent(u[2]) : SETTINGS(id + type);
+
+		const isResolved = linksData[id];
+		if (!isResolved)
+		{
+			linksData[id] = [elLink];
+		}
+
+		if (!linksData[id].includes(elLink))
+			linksData[id].push(elLink);
+
+		if (!elLink._hrefResolved)
+		{
+			elLink.classList.add("alert");
+			elLink.classList.remove("successBtn");
+		}
+		if (url)
+		{
+			if (Array.isArray(url))
+				url = url[0];
+
+			linkUpdate(elLink, url);
+			continue;
+		}
+		if (!isResolved)
+			resolveUrl(id, type, elLink._hrefOrig);
+	}
+};
+
+/**
+ * Updates a link with a new URL and styling to indicate that it has been resolved.
+ * @param {HTMLAnchorElement} elA - The link to update.
+ * @param {string} url - The new URL to set on the link.
+ */
+const linkUpdate = (elA, url, update) =>
+{
+	elA.classList.add("successBtn");
+	elA.classList.remove("alert");
+	if (elA._hrefResolved && !update)
+		return;
+
+	if (!elA._hrefResolved && url)
+	{
+		elA.addEventListener("mousedown", evt =>
+		{
+			if (!evt.isTrusted || !evt.target._hrefResolved)
+				return;
+
+			if (SETTINGS.resolvedClick && !SETTINGS.resolvedShow)
+				elA.href = elA._hrefResolved;
+			else if (!SETTINGS.resolvedClick && SETTINGS.resolvedShow)
+				elA.href = elA._hrefOrig;
+			else return;
+
+			evt.preventDefault();
+			elA.click();
+			elA.href = SETTINGS.resolvedShow ? elA._hrefResolved : elA._hrefOrig;
+		}, false);
+	}
+	if (url)
+		elA._hrefResolved = url;
+
+	const elHover = elA.querySelector("a.origUrl");
+	if (SETTINGS.resolvedShow)
+	{
+		elA.href = elA._hrefResolved;
+		elHover.title = "Original link";
+		elHover.href = elA._hrefOrig;
+	}
+	else
+	{
+		elA.href = elA._hrefOrig;
+		elHover.title = "Resolved link";
+		elHover.href = elA._hrefResolved;
+	}
+	if (SETTINGS.resolvedClick)
+	{
+		elA.classList.add("resolved");
+		elA.classList.remove("tracked");
+	}
+	else
+	{
+		elA.classList.add("tracked");
+		elA.classList.remove("resolved");
+	}
+	// a.title = a._hrefResolved;
+};
+
+/**
+ * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
+ * @param {string} id - The ID of the deal to resolve.
+ * @param {string} type - The type of the deal to resolve.
+ * @param {string} url - The URL to resolve.
+ * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
+ */
+const resolveUrl = (id, type, url) => fetch( api + id + "?t=" + type + "&u=" + encodeURIComponent(url) + "&r=" + encodeURIComponent(location.href),{referrerPolicy: "unsafe-url"})
+	.then(r => r.json())
+	.then(data =>
+	{
+		if (data.url && !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
+		{
+			SETTINGS(data.id + data.type, data.url);
+			const aLinks = linksData[data.id] || [];
+			for(let i = 0; i < aLinks.length; i++)
+				linkUpdate(aLinks[i], data.url);
+		}
+		return data;
+	})
+	.catch(console.error);
 
 /**
  * Extracts the ID and type of a deal from a given URL.
@@ -251,90 +473,6 @@ const getIdFromUrl = url =>
 };
 
 /**
- * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
- * @param {HTMLElement} node - The root node to search for links to fix.
- */
-const processLinks = node =>
-{
-	const nlLinks = $$(`a:not(.${sdp})`, node, true) || [];
-	for(let i = 0; i < nlLinks.length; i++)
-	{
-		const elLink = nlLinks[i];
-
-		elLink.classList.add(sdp);
-		const {id, type} = getIdFromUrl(elLink.href) || {};
-		if (!id)
-			continue;
-
-		elLink._hrefOrig = elLink.href;
-		const elOrig = document.createElement("a");
-		elOrig.href = elLink._hrefOrig;
-		elOrig.className = sdp + " origUrl";
-		elOrig.title = "Original link";
-		elLink.append(elOrig);
-
-		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
-		let url = u ? decodeURIComponent(u[2]) : SETTINGS(id + type);
-
-		if (url)
-		{
-			if (typeof(url) === "object")
-				url = url[0];
-
-			linkUpdate(elLink, url);
-			continue;
-		}
-		if (!elLink._resolved)
-		{
-			elLink.classList.toggle("alert", true);
-			elLink.classList.toggle("successBtn", false);
-		}
-		if (!linksData[id])
-		{
-			linksData[id] = [elLink];
-			resolveUrl(id, type, elLink._hrefOrig);
-		}
-		if (!linksData[id].includes(elLink))
-			linksData[id].push(elLink);
-	}
-};
-
-/**
- * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
- * @param {string} id - The ID of the deal to resolve.
- * @param {string} type - The type of the deal to resolve.
- * @param {string} url - The URL to resolve.
- * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
- */
-const resolveUrl = (id, type, url) => fetch( api + id + "?t=" + type + "&u=" + encodeURIComponent(url) + "&r=" + encodeURIComponent(location.href),{referrerPolicy: "unsafe-url"})
-	.then(r => r.json())
-	.then(data =>
-	{
-		if (data.url && !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
-		{
-			SETTINGS(data.id + data.type, data.url);
-			const aLinks = linksData[data.id] || [];
-			for(let i = 0; i < aLinks.length; i++)
-				linkUpdate(aLinks[i], data.url);
-		}
-		return data;
-	})
-	.catch(console.error);
-
-/**
- * Updates a link with a new URL and styling to indicate that it has been resolved.
- * @param {HTMLAnchorElement} a - The link to update.
- * @param {string} url - The new URL to set on the link.
- */
-const linkUpdate = (a, url) =>
-{
-	a._resolved = true;
-	a.href = url;
-	a.classList.toggle("successBtn", true);
-	a.classList.toggle("alert", false);
-};
-
-/**
  * The main function that runs when the page is loaded.
  */
 const main = () =>
@@ -345,6 +483,10 @@ const main = () =>
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
 	document.body.classList.toggle("darkMode", isDarkMode);
+	//wrap hamburger menu
+	for(let i = 0, nlStyle = document.head.querySelectorAll("style"); i < nlStyle.length; i++)
+		nlStyle[i].textContent = nlStyle[i].textContent.replace(/\(min-width: 1024px\)/g, "(min-width: 1150px)");
+
 	const style = document.createElement("style");
 	style.innerHTML = `
 .successBtn
@@ -364,23 +506,26 @@ const main = () =>
 	--buttonBackgroundColor: #0A7A26;
 }
 
-.freeonly,
-div.free,
-li.free
+div[free],
+li[free]
 {
 	box-shadow: 0 0 10px red;
 	background-color: #ffdde0 !important;
 }
-body.darkMode .freeonly,
-body.darkMode div.free,
-body.darkMode li.free
+#freeOnly:checked ~ * .freeOnly
+{
+	text-shadow: 0 0 20px #f00;
+
+}
+body.darkMode div[free],
+body.darkMode li[free]
 {
 	box-shadow: 0 0 10px red;
 	background-color: #861614 !important;
 	/* color: black; */
 }
-#fpMainContent .gridCategory .fpGridBox.list.free,
-#fpMainContent .gridCategory .fpGridBox.simple.free
+#fpMainContent .gridCategory .fpGridBox.list[free],
+#fpMainContent .gridCategory .fpGridBox.simple[free]
 {
 	margin: 5px;
 }
@@ -421,7 +566,7 @@ a.origUrl::after
 
 a.origUrl::after
 {
-	width: 3em;
+	width: 2.2em;
 }
 
 a.origUrl::before
@@ -433,7 +578,7 @@ a.origUrl::before
 	background-position: center;
 	background-repeat: no-repeat;
 	padding: 0.5em 1em;
-	left: .5em;
+	left: .1em;
 	opacity: 0.5;
 }
 
@@ -449,40 +594,85 @@ a:hover > a.origUrl
 .omegaBanner,
 .frontpageGrid__bannerAd,
 .frontpageSlickdealsGrid__bannerAd,
-#freeOnly
+.hidden
 {
-  display: none !important;
+	display: none !important;
 }
 
-#freeOnly:checked ~ * .dealTiles li:not(.free),
-#freeOnly:checked ~ * .blueprint li:not(.free),
-#freeOnly:checked ~ * .frontpageGrid li:not(.free)
+#freeOnly:checked ~ * .frontpageRecommendationCarousel li:not([free]),
+#freeOnly:checked ~ * .dealTiles li:not([free]),
+#freeOnly:checked ~ * .bp-p-categoryPage_main li:not([free]), /* https://slickdeals.net/deals/*** */
+#freeOnly:checked ~ * .frontpageGrid li:not([free])
 {
-  display: none;
-}
-.freeonly
-{
-  cursor: pointer;
-  line-height: 0;
-  display: inline-block;
-  margin-right: 0.5em;
-  text-align: center;
-  vertical-align: middle;
-
-}
-#freeOnly:checked ~ * .freeonly::before
-{
-  content: "☑";
-}
-.freeonly::before
-{
-  content: "☐";
-  display: inline-block;
-  height: 1em;
-  width: 1em;
-  line-height: 1em;
+	display: none;
 }
 
+/* checkboxes */
+
+#resolvedClick:checked ~ * .resolvedClick::before,
+#resolvedShow:checked ~ * .resolvedShow::before,
+#freeOnly:checked ~ * .freeOnly::before
+{
+	content: "☑";
+}
+
+.sdp_menuItem
+{
+	width: 100%;
+}
+
+.sdp_menuItem > label
+{
+	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	padding-left: 0 !important;
+	padding-right: 0.5em !important;
+}
+
+.sdp_menuItem > label::before
+{
+	content: "☐";
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	line-height: 1em;
+	font-size: 1.3em;
+	margin: 0 0.1em;
+}
+
+.sdp_menuItem > label::after
+{
+	content: attr(label);
+	display: inline-block;
+}
+
+.sdp_menuItem .slickdealsHeader__navItemText
+{
+	font-weight: inherit !important;
+}
+
+/* end checkboxes */
+a.tracked
+{
+	position: relative;
+	z-index: 0;
+	display: inline-flex;
+}
+
+a.tracked::before
+{
+	content: "";
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	background-color: pink;
+	opacity: 0.7;
+	border-radius: inherit;
+	z-index: -1;
+	bottom: 0;
+
+}
 .dealCard__priceContainer
 {
 	display: unset !important;
@@ -491,11 +681,21 @@ a:hover > a.origUrl
 {
 	position: relative;
 }
+
+.cardPriceInfo /* added price wrapper for https://slickdeals.net/deals/*** */ 
+{
+	grid-area: price;
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+}
+.cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/*** */
 .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
 a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
+	height: 1em;
 }
 @media (min-width: 768px) {
 	.dealCard__content {
@@ -504,27 +704,63 @@ a[data-deal-diff]::after /* deal list page */
 }
 	`;
 	document.head.append(style);
-	const elInput = document.createElement("input");
-	elInput.type = "checkbox";
-	elInput.id = "freeOnly";
-	elInput.checked = SETTINGS.freeOnly;
-	elInput.addEventListener("input", () => SETTINGS("freeOnly", elInput.checked));
-	document.body.insertBefore(elInput, document.body.firstChild);
-	const elHeader = $$(".slickdealsHeaderSubNav__items");
+	const elHeader = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
 	if (elHeader)
 	{
+		const dataset = Object.keys(elHeader.dataset)[0];
 			// header.firstChild.firstChild.style.padding = 0;
-		const elLabel = document.createElement("label");
-		elLabel.setAttribute("for", "freeOnly");
-		elLabel.className = "freeonly headingRight";
-		elLabel.title = "Free Only";
-		const elLi = document.createElement("li");
-		elLi.className = "slickdealsHeaderSubNav__item";
+		const elBefore = elHeader.lastElementChild;
+		let elLabel;
+		let elLi = elBefore.cloneNode(false);
+		elLi.classList.add("sdp_menuItem");
+
+		elLabel = checkbox("freeOnly").label;
+		elLabel.dataset[dataset] = "";
+		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
+		elLabel.title = "Only show free items";
+		elLabel.setAttribute("label", "Free Only");
+		elLi = elLi.cloneNode(false);
 		elLi.append(elLabel);
-		elHeader.insertBefore(elLi, elHeader.children[1]);
+		// elBefore.before(elLi);
+		elHeader.append(elLi);
+
+		elLabel = checkbox("resolvedShow").label;
+		elLabel.dataset[dataset] = "";
+		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
+		elLabel.title = "Show resolved links on hover";
+		elLabel.setAttribute("label", "Show resolved");
+		elLi = elLi.cloneNode(false);
+		elLi.append(elLabel);
+		// elBefore.before(elLi);
+		elHeader.append(elLi);
+
+		elLabel = checkbox("resolvedClick").label;
+		elLabel.dataset[dataset] = "";
+		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
+		elLabel.title = "Use resolved links on click";
+		elLabel.setAttribute("label", "Use resolved");
+		elLi = elLi.cloneNode(false);
+		elLi.append(elLabel);
+		// elBefore.before(elLi);
+		elHeader.append(elLi);
 	}
 	console.log("slickdeals+ initialized");
 };//main()
+
+const checkbox = id =>
+{
+	const elInput = document.createElement("input");
+	const elLabel = document.createElement("label");
+	elInput.type = "checkbox";
+	elInput.id = id;
+	elInput.checked = SETTINGS[id];
+	elInput.className = "hidden";
+	elInput.addEventListener("input", () => SETTINGS(id, ~~elInput.checked));
+	elLabel.setAttribute("for", id);
+	elLabel.className = id;
+	document.body.insertBefore(elInput, document.body.firstChild);
+	return {label: elLabel, input: elInput};
+};
 
 if (document.readyState === "complete")
 	main();
