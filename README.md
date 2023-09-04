@@ -1,4 +1,4 @@
-# slickdealsPlus
+# Slickdeals+
 Various enhancements:
 
 * Display price and percent difference between original and sale prices
