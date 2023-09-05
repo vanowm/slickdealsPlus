@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.14
+// @version      1.15
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -69,8 +69,7 @@ const SETTINGS = (() =>
 {
 	const dataDefault = {
 		freeOnly: 0, /* show free only */
-		resolvedShow: 1, /* show resolved links */
-		resolvedClick: 0 /* use resolved links on click */
+		resolveLinks: 1 /* use resolved links by default*/
 	};
 	let data = Object.assign({}, dataDefault);
 	try
@@ -81,6 +80,21 @@ const SETTINGS = (() =>
 	if (Object.prototype.toString.call(data) !== "[object Object]")
 		data = Object.assign({}, dataDefault);
 
+	/* clean up old settings */
+	const reg = /^\d/;
+	for(const i in data)
+	{
+		if (reg.test(i))
+			continue;
+
+		/* upgrade from v1.14 */
+		if (i === "resolvedClick")
+			data.resolveLinks = data[i];
+
+		if (!Object.prototype.hasOwnProperty.call(dataDefault, i))
+			delete data[i];
+
+	}
 	const cache = new Map(Object.entries(data));
 	let timer;
 	let timeout;
@@ -129,7 +143,7 @@ const SETTINGS = (() =>
 			return cache.get(id);
 
 		cache.set(id, value);
-		if (id === "resolvedShow" || id === "resolvedClick")
+		if (id === "resolveLinks")
 		{
 			updateLinks();
 		}
@@ -147,6 +161,12 @@ const SETTINGS = (() =>
 
 const updateLinks = () =>
 {
+	if (SETTINGS.resolveLinks)
+	{
+		const nlList = $$(".notResolved", document.body, true);
+		if (nlList.length > 0)
+			processLinks(nlList, true);
+	}
 	for(const id in linksData)
 	{
 		const aLinks = linksData[id];
@@ -192,12 +212,12 @@ const trim = t => ("" + t).trim();
 
 /**
  * Divides a price by a specified divider and formats it as a string with a dollar sign and two decimal places.
- * @param {string} text - The text to prepend to the formatted price.
+ * @param {string} _text - The text to prepend to the formatted price.
  * @param {string} divider - The value to divide the price by.
  * @param {string} price - The price to divide and format.
  * @returns {string} The formatted price with the specified text prepended to it.
  */
-const priceDivide = (text, divider, price) => "$" + (Number.parseFloat(price.replace(/,/g, "") / Number.parseFloat(divider))).toFixed(2);
+const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.replace(/,/g, "") / Number.parseFloat(divider))).toFixed(2);
 
 /**
  * Extracts pricing information from a given node and its children.
@@ -303,12 +323,15 @@ const processCards = (node, force) =>
 
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
- * @param {HTMLElement} node - The root node to search for links to fix.
+ * @param {HTMLElement|NodeList} node - The root node or NodeList to search for links to fix.
+ * @param {boolean} [force=false] - Whether to force processing of already processed links.
+ * @returns {void}
  */
 const processLinks = (node, force) =>
 {
 	const processed = (force ? "-" : "") + processedMarker;
-	const nlLinks = $$(`a:not(.${processed})`, node, true) || [];
+	const nlLinks = node instanceof NodeList ? node : $$(`a:not(.${processed})`, node, true) || [];
+
 	for(let i = 0; i < nlLinks.length; i++)
 	{
 		const elLink = nlLinks[i];
@@ -321,41 +344,83 @@ const processLinks = (node, force) =>
 		if (!id)
 			continue;
 
-		elLink._hrefOrig = elLink.href;
-		const elHover = document.createElement("a");
-		elHover.href = elLink._hrefOrig;
-		elHover.classList.add(processedMarker, "origUrl");
-		elHover.title = "Original link";
-		elHover.target = elLink.target;
-		elLink.append(elHover);
-
+		if (!elLink._hrefOrig)
+		{
+			elLink._hrefOrig = elLink.href;
+			const elHover = document.createElement("a");
+			elHover.href = elLink._hrefOrig;
+			elHover.classList.add(processedMarker, "origUrl", "hidden");
+			elHover.title = "Original link";
+			elHover.target = elLink.target;
+			elLink.append(elHover);
+		}
 		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
 		let url = u ? decodeURIComponent(u[2]) : SETTINGS(id + type);
 
-		const isResolved = linksData[id];
-		if (!isResolved)
+		const aLinks = linksData[id] || [elLink];
+		const isInited = aLinks.resolved !== undefined;
+		if (isInited)
 		{
-			linksData[id] = [elLink];
+			if (!aLinks.includes(elLink))
+				aLinks.push(elLink);
+		}
+		else
+		{
+			aLinks.resolved = false;
+			linksData[id] = aLinks;
 		}
 
-		if (!linksData[id].includes(elLink))
-			linksData[id].push(elLink);
-
-		if (!elLink._hrefResolved)
-		{
-			elLink.classList.add("alert");
-			elLink.classList.remove("successBtn");
-		}
+		// if (!elLink._hrefResolved)
+		// {
+		// 	elLink.classList.add("alert");
+		// }
 		if (url)
 		{
 			if (Array.isArray(url))
 				url = url[0];
 
-			linkUpdate(elLink, url);
+			aLinks.resolved = true;
+			linkUpdate(elLink, url, force);
 			continue;
 		}
-		if (!isResolved)
-			resolveUrl(id, type, elLink._hrefOrig);
+		if (isInited && !force)
+			return;
+
+		elLink.classList.add("notResolved");
+		if (SETTINGS.resolveLinks)
+		{
+			const dsLoading = document.documentElement.dataset;
+			if (dsLoading.loading === undefined)
+				dsLoading.loading = 0;
+
+			dsLoading.loading++;
+			resolveUrl(id, type, elLink._hrefOrig)
+				.then(data =>
+				{
+					if (!data)
+						throw new Error("No data:" + data);
+
+					if (id === data.id
+						&& type === data.type
+						&& data.url
+						&& !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
+					{
+						SETTINGS(id + type, data.url);
+						for(let i = 0; i < aLinks.length; i++)
+							linkUpdate(aLinks[i], data.url);
+
+						aLinks.resolved = true;
+					}
+					return data;
+				})
+				.finally(() =>
+				{
+					if (!--dsLoading.loading)
+						delete dsLoading.loading;
+
+				})
+				.catch(console.error);
+		}
 	}
 };
 
@@ -366,52 +431,30 @@ const processLinks = (node, force) =>
  */
 const linkUpdate = (elA, url, update) =>
 {
-	elA.classList.add("successBtn");
-	elA.classList.remove("alert");
+	// elA.classList.remove("alert");
 	if (elA._hrefResolved && !update)
 		return;
 
-	if (!elA._hrefResolved && url)
-	{
-		elA.addEventListener("mousedown", evt =>
-		{
-			if (!evt.isTrusted || !evt.target._hrefResolved)
-				return;
-
-			if (SETTINGS.resolvedClick && !SETTINGS.resolvedShow)
-				elA.href = elA._hrefResolved;
-			else if (!SETTINGS.resolvedClick && SETTINGS.resolvedShow)
-				elA.href = elA._hrefOrig;
-			else return;
-
-			evt.preventDefault();
-			elA.click();
-			elA.href = SETTINGS.resolvedShow ? elA._hrefResolved : elA._hrefOrig;
-		}, false);
-	}
 	if (url)
 		elA._hrefResolved = url;
 
+	elA.classList.toggle("notResolved", !elA._hrefResolved);
 	const elHover = elA.querySelector("a.origUrl");
-	if (SETTINGS.resolvedShow)
+	if (SETTINGS.resolveLinks && elA._hrefResolved)
 	{
-		elA.href = elA._hrefResolved;
 		elHover.title = "Original link";
 		elHover.href = elA._hrefOrig;
-	}
-	else
-	{
-		elA.href = elA._hrefOrig;
-		elHover.title = "Resolved link";
-		elHover.href = elA._hrefResolved;
-	}
-	if (SETTINGS.resolvedClick)
-	{
+		elHover.classList.remove("hidden");
+		elA.href = elA._hrefResolved;
 		elA.classList.add("resolved");
 		elA.classList.remove("tracked");
 	}
 	else
 	{
+		elHover.classList.toggle("hidden", !elA._hrefResolved);
+		elHover.title = "Resolved link";
+		elHover.href = elA._hrefResolved;
+		elA.href = elA._hrefOrig;
 		elA.classList.add("tracked");
 		elA.classList.remove("resolved");
 	}
@@ -427,17 +470,6 @@ const linkUpdate = (elA, url, update) =>
  */
 const resolveUrl = (id, type, url) => fetch(api + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r.json())
-	.then(data =>
-	{
-		if (data.url && !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
-		{
-			SETTINGS(data.id + data.type, data.url);
-			const aLinks = linksData[data.id] || [];
-			for(let i = 0; i < aLinks.length; i++)
-				linkUpdate(aLinks[i], data.url);
-		}
-		return data;
-	})
 	.catch(console.error);
 
 /**
@@ -455,7 +487,6 @@ const getUrlInfo = url =>
 
 	for (let i = 0; i < ids.length; i++)
 	{
-		// const r = new RegExp("(\\?|(&|&amp;))((" + ids[i] + ")=([^&]+))", "i");
 		matchIDS = new RegExp("(\\?|(&|&amp;))((" + ids[i] + ")=([^&]+))", "i").exec(url);//url.match(r);
 		if (matchIDS)
 			break;
@@ -487,21 +518,22 @@ const main = () =>
 
 	const style = document.createElement("style");
 	style.innerHTML = `
-.successBtn
+a.resolved:not(.seeDealButton)
 {
-	--buttonBackgroundColor: #14F572;
+	color: #00b309;
 }
-.seeDealButton.successBtn:not(:hover):not(:active)
+
+.seeDealButton.resolved
 {
-	color: black;
+	--buttonBackgroundColor: #0c9144;
 }
-.successBtn:hover
+.seeDealButton.resolved:hover
 {
-	--buttonBackgroundColor: #0EAC28;
+	--buttonBackgroundColor: #0b7b1d;
 }
-.successBtn:active
+.seeDealButton.resolved:active
 {
-	--buttonBackgroundColor: #0A7A26;
+	--buttonBackgroundColor: #06551a;
 }
 
 div[free],
@@ -510,7 +542,7 @@ li[free]
 	box-shadow: 0 0 10px red;
 	background-color: #ffdde0 !important;
 }
-#freeOnly:checked ~ * .freeOnly
+#freeOnly:checked ~ * label.freeOnly
 {
 	text-shadow: 0 0 20px #f00;
 
@@ -549,7 +581,7 @@ a.origUrl
 {
 	position: relative;
 	height: 1em;
-	display: none !important;
+	display: none;
 }
 
 a.origUrl::before,
@@ -587,7 +619,7 @@ a.origUrl:hover::before
 
 a:hover > a.origUrl
 {
-	display: inline !important;
+	display: inline;
 }
 .omegaBanner,
 .frontpageGrid__bannerAd,
@@ -607,16 +639,10 @@ a:hover > a.origUrl
 
 /* checkboxes */
 
-#resolvedClick:checked ~ * .resolvedClick::before,
-#resolvedShow:checked ~ * .resolvedShow::before,
-#freeOnly:checked ~ * .freeOnly::before
+#resolveLinks:checked ~ * label.resolveLinks::before,
+#freeOnly:checked ~ * label.freeOnly::before
 {
 	content: "☑";
-}
-
-.sdp_menuItem
-{
-	width: 100%;
 }
 
 .sdp_menuItem > label
@@ -624,8 +650,6 @@ a:hover > a.origUrl
 	cursor: pointer;
 	display: inline-flex;
 	align-items: center;
-	padding-left: 0 !important;
-	padding-right: 0.5em !important;
 }
 
 .sdp_menuItem > label::before
@@ -651,26 +675,27 @@ a:hover > a.origUrl
 }
 
 /* end checkboxes */
-a.tracked
+
+:root[data-loading] .sdp_menuItem.resolveLinks
 {
 	position: relative;
-	z-index: 0;
-	display: inline-flex;
 }
 
-a.tracked::before
+:root[data-loading] .sdp_menuItem.resolveLinks::after
 {
-	content: "";
+	content: "⌛";
 	position: absolute;
-	width: 100%;
-	height: 100%;
-	background-color: pink;
-	opacity: 0.7;
-	border-radius: inherit;
-	z-index: -1;
-	bottom: 0;
-
+	right: -0.2em;
+	line-height: 2.5em;
+	animation: spin 1s linear infinite;
 }
+
+@keyframes spin {
+	100% {
+		transform: rotate(360deg);
+	}
+}
+
 .dealCard__priceContainer
 {
 	display: unset !important;
@@ -709,35 +734,30 @@ a[data-deal-diff]::after /* deal list page */
 			// header.firstChild.firstChild.style.padding = 0;
 		const elBefore = elHeader.lastElementChild;
 		let elLabel;
-		let elLi = elBefore.cloneNode(false);
-		elLi.classList.add("sdp_menuItem");
+		const elLiDefault = elBefore.cloneNode(false);
+		elLiDefault.classList.add("sdp_menuItem");
+		let elLi;
 
-		elLabel = checkbox("freeOnly").label;
+		let id = "freeOnly";
+		elLabel = checkbox(id).label;
 		elLabel.dataset[dataset] = "";
 		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
 		elLabel.title = "Only show free items";
 		elLabel.setAttribute("label", "Free Only");
-		elLi = elLi.cloneNode(false);
+		elLi = elLiDefault.cloneNode(false);
+		elLi.classList.add(id);
 		elLi.append(elLabel);
 		// elBefore.before(elLi);
 		elHeader.append(elLi);
 
-		elLabel = checkbox("resolvedShow").label;
+		id = "resolveLinks";
+		elLabel = checkbox(id).label;
 		elLabel.dataset[dataset] = "";
 		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Show resolved links on hover";
-		elLabel.setAttribute("label", "Show resolved");
-		elLi = elLi.cloneNode(false);
-		elLi.append(elLabel);
-		// elBefore.before(elLi);
-		elHeader.append(elLi);
-
-		elLabel = checkbox("resolvedClick").label;
-		elLabel.dataset[dataset] = "";
-		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Use resolved links on click";
-		elLabel.setAttribute("label", "Use resolved");
-		elLi = elLi.cloneNode(false);
+		elLabel.title = "Use resolved links";
+		elLabel.setAttribute("label", "Resolved links");
+		elLi = elLiDefault.cloneNode(false);
+		elLi.classList.add(id);
 		elLi.append(elLabel);
 		// elBefore.before(elLi);
 		elHeader.append(elLi);
