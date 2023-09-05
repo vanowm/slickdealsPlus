@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.15.2
+// @version      1.16
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -46,7 +46,39 @@ new MutationObserver(mutations =>
 		for (let n = 0; n < mutations[i].addedNodes.length; n++)
 		{
 			const node = mutations[i].addedNodes[n];
-			if (!node.classList || node.classList.contains(processedMarker))
+
+			if (!node.classList)
+				continue;
+
+			/* remove ads */
+			if (SETTINGS.noAds)
+			{
+				if (node.tagName === "IFRAME")
+				{
+					console.log("Slickdeals+ blocked iframe", node.src);
+					node.remove();
+					continue;
+				}
+				if (node.tagName === "SCRIPT"
+					&& ((node.src && !/slickdeals/.test(new URL(node.src).hostname))
+						|| /([.:-]ads(loader|[.:-])|banner)/i.test(node.textContent)))
+				{
+					console.log("Slickdeals+ blocked script", node.src);
+					node.remove();
+					continue;
+				}
+
+				if (node.matches(".ablock,.adunit"))
+				{
+					if (node.parentElement.matches(".subBoxContent"))
+						node.parentElement.parentElement.remove();
+
+					node.parentElement.remove();
+				}
+			}
+			/* end remove ads */
+
+			if (node.classList.contains(processedMarker))
 				continue;
 
 			processCards(node);
@@ -69,7 +101,8 @@ const SETTINGS = (() =>
 {
 	const dataDefault = {
 		freeOnly: 0, /* show free only */
-		resolveLinks: 1 /* use resolved links by default*/
+		resolveLinks: 1, /* use resolved links by default*/
+		noAds: 1 /* remove ads */
 	};
 	let data = Object.assign({}, dataDefault);
 	try
@@ -204,7 +237,7 @@ const $$ = (id, node, all) =>
 };
 
 /**
- * Trims whitespace from a given string.
+ * Converts input into a string and trims whitespace.
  * @param {string} t - The string to trim.
  * @returns {string} The trimmed string.
  */
@@ -221,19 +254,23 @@ const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.re
 
 /**
  * Extracts pricing information from a given node and its children.
- * @param {HTMLElement} node - The root node to search for pricing information.
+ * @param {HTMLElement|NodeList} node - The root node or NodeList to search for pricing information.
+ * @param {boolean} [force=false] - Whether to force processing of already processed items.
  * @returns {Array} An array of objects containing pricing information for each item found.
  */
 const processCards = (node, force) =>
 {
 	const processed = (force ? "-" : "") + processedMarker;
-	const nlItems = $$(	`.salePrice:not(.${processed}),` +
-						`.itemPrice:not(.${processed}),` +
-						`.price:not(.${processed}),` +
-						`.bp-p-dealCard_price:not(.${processed}),` + // https://slickdeals.net/deals/watches/
-						`.dealCard__price:not(.${processed}),` +
-						`.dealPrice:not(.${processed})`
-	, node, true) || [];
+	const nlItems = node instanceof NodeList
+		? node
+		: $$(	`.salePrice:not(.${processed}),` +
+				`.itemPrice:not(.${processed}),` +
+				`.price:not(.${processed}),` +
+				`.bp-p-dealCard_price:not(.${processed}),` + // https://slickdeals.net/deals/watches/
+				`.dealCard__price:not(.${processed}),` +
+				`.dealPrice:not(.${processed})`
+		, node, true) || [];
+
 	// const result = [];
 	for (let i = 0; i < nlItems.length; i++)
 	{
@@ -501,6 +538,60 @@ const getUrlInfo = url =>
 	return {id: matchIDS[5], type: matchIDS[4]};
 };
 
+const initMenu = elHeader =>
+{
+	// header.firstChild.firstChild.style.padding = 0;
+	let elLabel;
+	const elLiMenu = elHeader.lastElementChild.cloneNode(true);
+	elLiMenu.classList.add("spd-menu");
+	elLiMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
+	elLiMenu.querySelector("p").textContent = "Slickdeals+";
+	const elUl = elLiMenu.querySelector("ul");
+
+	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
+	const elLiDefault = elUl.querySelector("li").cloneNode(true);
+	const dataset = Object.keys(elLiDefault.firstElementChild.dataset)[0];
+	elUl.innerHTML = "";
+	elLiDefault.innerHTML = "";
+	elHeader.append(elLiMenu);
+
+	let elLi;
+
+	let id = "freeOnly";
+	elLabel = checkbox(id).label;
+	elLabel.dataset[dataset] = "";
+	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
+	elLabel.title = "Only show free items";
+	elLabel.textContent = "Free Only";
+	elLi = elLiDefault.cloneNode(true);
+	elLi.classList.add(id);
+	elLi.append(elLabel);
+	elUl.append(elLi);
+
+	id = "resolveLinks";
+	elLabel = checkbox(id).label;
+	elLabel.dataset[dataset] = "";
+	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
+	elLabel.title = "Use resolved links";
+	elLabel.textContent = "Resolved links";
+	elLi = elLiDefault.cloneNode(true);
+	elLi.classList.add(id);
+	elLi.append(elLabel);
+	elUl.append(elLi);
+
+	id = "noAds";
+	elLabel = checkbox(id).label;
+	elLabel.dataset[dataset] = "";
+	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
+	elLabel.title = "Block ads. Require page refresh";
+	elLabel.textContent = "No ads";
+	// elLabel.setAttribute("label", "No ads");
+	elLi = elLiDefault.cloneNode(true);
+	elLi.classList.add(id);
+	elLi.append(elLabel);
+	// elBefore.before(elLi);
+	elUl.append(elLi);
+};
 /**
  * The main function that runs when the page is loaded.
  */
@@ -512,48 +603,14 @@ const main = () =>
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
 	document.body.classList.toggle("darkMode", isDarkMode);
-	//wrap hamburger menu
-	for(let i = 0, nlStyle = document.head.querySelectorAll("style"); i < nlStyle.length; i++)
-		nlStyle[i].textContent = nlStyle[i].textContent.replace(/\(min-width: 1024px\)/g, "(min-width: 1150px)");
-
 	const style = document.createElement("style");
 	style.innerHTML = css;
 	document.head.append(style);
+
 	const elHeader = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
 	if (elHeader)
-	{
-		const dataset = Object.keys(elHeader.dataset)[0];
-			// header.firstChild.firstChild.style.padding = 0;
-		const elBefore = elHeader.lastElementChild;
-		let elLabel;
-		const elLiDefault = elBefore.cloneNode(false);
-		elLiDefault.classList.add("sdp_menuItem");
-		let elLi;
+		initMenu(elHeader);
 
-		let id = "freeOnly";
-		elLabel = checkbox(id).label;
-		elLabel.dataset[dataset] = "";
-		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Only show free items";
-		elLabel.setAttribute("label", "Free Only");
-		elLi = elLiDefault.cloneNode(false);
-		elLi.classList.add(id);
-		elLi.append(elLabel);
-		// elBefore.before(elLi);
-		elHeader.append(elLi);
-
-		id = "resolveLinks";
-		elLabel = checkbox(id).label;
-		elLabel.dataset[dataset] = "";
-		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Use resolved links";
-		elLabel.setAttribute("label", "Resolved links");
-		elLi = elLiDefault.cloneNode(false);
-		elLi.classList.add(id);
-		elLi.append(elLabel);
-		// elBefore.before(elLi);
-		elHeader.append(elLi);
-	}
 	//for some reason observer failed to process everything while page is still loading, so we do it manually
 	const elPageContent = $$("pageContent");
 	if (elPageContent)
@@ -576,6 +633,9 @@ const checkbox = id =>
 	elLabel.setAttribute("for", id);
 	elLabel.className = id;
 	document.body.insertBefore(elInput, document.body.firstChild);
+	const elStyle = document.createElement("style");
+	elStyle.textContent = `#${id}:checked ~ * label.${id}::before{content:"☑";}`;
+	document.head.append(elStyle);
 	return {label: elLabel, input: elInput};
 };
 
@@ -708,20 +768,12 @@ a:hover > a.origUrl
 
 /* checkboxes */
 
-#resolveLinks:checked ~ * label.resolveLinks::before,
-#freeOnly:checked ~ * label.freeOnly::before
-{
-	content: "☑";
-}
-
-.sdp_menuItem > label
+.spd-menu .slickdealsHeaderDropdownItem > label
 {
 	cursor: pointer;
-	display: inline-flex;
-	align-items: center;
 }
 
-.sdp_menuItem > label::before
+.spd-menu .slickdealsHeaderDropdownItem > label::before
 {
 	content: "☐";
 	display: inline-block;
@@ -732,25 +784,14 @@ a:hover > a.origUrl
 	margin: 0 0.1em;
 }
 
-.sdp_menuItem > label::after
-{
-	content: attr(label);
-	display: inline-block;
-}
-
-.sdp_menuItem .slickdealsHeader__navItemText
-{
-	font-weight: inherit !important;
-}
-
 /* end checkboxes */
 
-:root[data-loading] .sdp_menuItem.resolveLinks
+:root[data-loading] .spd-menu
 {
 	position: relative;
 }
 
-:root[data-loading] .sdp_menuItem.resolveLinks::after
+:root[data-loading] .spd-menu::after
 {
 	content: "⌛";
 	position: absolute;
