@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.16
+// @version      1.16.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -786,20 +786,38 @@ a:hover > a.origUrl
 
 /* end checkboxes */
 
-:root[data-loading] .spd-menu
+@media (min-width: 1024px)
 {
-	position: relative;
+	:root[data-loading] .spd-menu
+	{
+		position: relative;
+	}
+	:root[data-loading] .spd-menu::after
+	{
+		content: "⌛";
+		position: absolute;
+		right: 0.1em;
+		line-height: 2.5em;
+		animation: spin 1s linear infinite;
+	}
 }
 
-:root[data-loading] .spd-menu::after
+@media (max-width: 1023px)
 {
-	content: "⌛";
-	position: absolute;
-	right: -0.2em;
-	line-height: 2.5em;
-	animation: spin 1s linear infinite;
+	:root[data-loading] .spd-menu .slickdealsHeader__navItemText
+	{
+		position: relative;
+		overflow: unset !important;
+	}
+	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+	{
+		content: "⌛";
+		position: absolute;
+		right: -1.5em;
+		line-height: 2.0em;
+		animation: spin 1s linear infinite;
+	}
 }
-
 @keyframes spin {
 	100% {
 		transform: rotate(360deg);
