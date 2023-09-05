@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.16.1
+// @version      1.16.2
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -81,8 +81,21 @@ new MutationObserver(mutations =>
 			if (node.classList.contains(processedMarker))
 				continue;
 
+			// create menu and attach to the header
+			if (node.matches(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection"))
+			{
+				initMenu(node);
+				continue;
+			}
 			processCards(node);
 			processLinks(node);
+		}
+		// for some reason attached menu is being removed...reattach it back if necessary
+		for(let n = 0; n < mutations[i].removedNodes.length; n++)
+		{
+			if (mutations[i].removedNodes[n] === initMenu.elMenu)
+				initMenu.elHeader.append(initMenu.elMenu);
+
 		}
 	}
 }).observe(document, {
@@ -591,6 +604,8 @@ const initMenu = elHeader =>
 	elLi.append(elLabel);
 	// elBefore.before(elLi);
 	elUl.append(elLi);
+	initMenu.elMenu = elLiMenu;
+	initMenu.elHeader = elHeader;
 };
 /**
  * The main function that runs when the page is loaded.
@@ -606,10 +621,6 @@ const main = () =>
 	const style = document.createElement("style");
 	style.innerHTML = css;
 	document.head.append(style);
-
-	const elHeader = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
-	if (elHeader)
-		initMenu(elHeader);
 
 	//for some reason observer failed to process everything while page is still loading, so we do it manually
 	const elPageContent = $$("pageContent");
