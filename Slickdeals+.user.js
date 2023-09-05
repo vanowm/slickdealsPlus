@@ -3,13 +3,13 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.15
+// @version      1.15.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
 
-(function (api)
+(function (css, api)
 {
 "use strict";
 if (window.top !== window.self)
@@ -517,7 +517,76 @@ const main = () =>
 		nlStyle[i].textContent = nlStyle[i].textContent.replace(/\(min-width: 1024px\)/g, "(min-width: 1150px)");
 
 	const style = document.createElement("style");
-	style.innerHTML = `
+	style.innerHTML = css;
+	document.head.append(style);
+	const elHeader = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
+	if (elHeader)
+	{
+		const dataset = Object.keys(elHeader.dataset)[0];
+			// header.firstChild.firstChild.style.padding = 0;
+		const elBefore = elHeader.lastElementChild;
+		let elLabel;
+		const elLiDefault = elBefore.cloneNode(false);
+		elLiDefault.classList.add("sdp_menuItem");
+		let elLi;
+
+		let id = "freeOnly";
+		elLabel = checkbox(id).label;
+		elLabel.dataset[dataset] = "";
+		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
+		elLabel.title = "Only show free items";
+		elLabel.setAttribute("label", "Free Only");
+		elLi = elLiDefault.cloneNode(false);
+		elLi.classList.add(id);
+		elLi.append(elLabel);
+		// elBefore.before(elLi);
+		elHeader.append(elLi);
+
+		id = "resolveLinks";
+		elLabel = checkbox(id).label;
+		elLabel.dataset[dataset] = "";
+		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
+		elLabel.title = "Use resolved links";
+		elLabel.setAttribute("label", "Resolved links");
+		elLi = elLiDefault.cloneNode(false);
+		elLi.classList.add(id);
+		elLi.append(elLabel);
+		// elBefore.before(elLi);
+		elHeader.append(elLi);
+	}
+	//for some reason observer failed to process everything while page is still loading, so we do it manually
+	const elPageContent = $$("pageContent");
+	if (elPageContent)
+	{
+		processCards(elPageContent);
+		processLinks(elPageContent);
+	}
+	console.log(GM_info.script.name, "v" + GM_info.script.version, "initialized");
+};//main()
+
+const checkbox = id =>
+{
+	const elInput = document.createElement("input");
+	const elLabel = document.createElement("label");
+	elInput.type = "checkbox";
+	elInput.id = id;
+	elInput.checked = SETTINGS[id];
+	elInput.className = "hidden";
+	elInput.addEventListener("input", () => SETTINGS(id, ~~elInput.checked));
+	elLabel.setAttribute("for", id);
+	elLabel.className = id;
+	document.body.insertBefore(elInput, document.body.firstChild);
+	return {label: elLabel, input: elInput};
+};
+
+if (document.readyState === "complete")
+	main();
+else
+{
+	window.addEventListener("DOMContentLoaded", main, false);
+	window.addEventListener("load", main, false);
+}
+})(`
 a.resolved:not(.seeDealButton)
 {
 	color: #00b309;
@@ -725,74 +794,5 @@ a[data-deal-diff]::after /* deal list page */
 		grid-template-rows:auto 67px auto 1fr 20px !important;
 	}
 }
-	`;
-	document.head.append(style);
-	const elHeader = $$(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
-	if (elHeader)
-	{
-		const dataset = Object.keys(elHeader.dataset)[0];
-			// header.firstChild.firstChild.style.padding = 0;
-		const elBefore = elHeader.lastElementChild;
-		let elLabel;
-		const elLiDefault = elBefore.cloneNode(false);
-		elLiDefault.classList.add("sdp_menuItem");
-		let elLi;
-
-		let id = "freeOnly";
-		elLabel = checkbox(id).label;
-		elLabel.dataset[dataset] = "";
-		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Only show free items";
-		elLabel.setAttribute("label", "Free Only");
-		elLi = elLiDefault.cloneNode(false);
-		elLi.classList.add(id);
-		elLi.append(elLabel);
-		// elBefore.before(elLi);
-		elHeader.append(elLi);
-
-		id = "resolveLinks";
-		elLabel = checkbox(id).label;
-		elLabel.dataset[dataset] = "";
-		elLabel.classList.add("slickdealsHeader__navItemText", "slickdealsHeader__navItemWrapper");
-		elLabel.title = "Use resolved links";
-		elLabel.setAttribute("label", "Resolved links");
-		elLi = elLiDefault.cloneNode(false);
-		elLi.classList.add(id);
-		elLi.append(elLabel);
-		// elBefore.before(elLi);
-		elHeader.append(elLi);
-	}
-	//for some reason observer failed to process everything while page is still loading, so we do it manually
-	const elPageContent = $$("pageContent");
-	if (elPageContent)
-	{
-		processCards(elPageContent);
-		processLinks(elPageContent);
-	}
-	console.log(GM_info.script.name, "v" + GM_info.script.version, "initialized");
-};//main()
-
-const checkbox = id =>
-{
-	const elInput = document.createElement("input");
-	const elLabel = document.createElement("label");
-	elInput.type = "checkbox";
-	elInput.id = id;
-	elInput.checked = SETTINGS[id];
-	elInput.className = "hidden";
-	elInput.addEventListener("input", () => SETTINGS(id, ~~elInput.checked));
-	elLabel.setAttribute("for", id);
-	elLabel.className = id;
-	document.body.insertBefore(elInput, document.body.firstChild);
-	return {label: elLabel, input: elInput};
-};
-
-if (document.readyState === "complete")
-	main();
-else
-{
-	window.addEventListener("DOMContentLoaded", main, false);
-	window.addEventListener("load", main, false);
-}
-// eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point
-})("szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Ⲟ,ꓳ,𐊒)=>([24,16,8,0].forEach(𐓂=>(𐊒=parseInt(ꓳ,36)>>𐓂&255,Ⲟ+=String.fromCharCode(𐊒))),Ⲟ),""));
+`/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point*/,
+"szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Ⲟ,ꓳ,𐊒)=>([24,16,8,0].forEach(𐓂=>(𐊒=parseInt(ꓳ,36)>>𐓂&255,Ⲟ+=String.fromCharCode(𐊒))),Ⲟ),""));
