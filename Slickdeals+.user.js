@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @include      https://slickdeals.net/*
-// @version      1.15.1
+// @version      1.15.2
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -246,7 +246,7 @@ const processCards = (node, force) =>
 		{
 			if ((price.toLowerCase() === "free"))
 				priceNew = 0;
-			else if (/^[\s\w]*\$/.test(price))
+			else if (/^[\s\w]*~?\$/.test(price))
 			{
 				priceNew = Number.parseFloat(price
 					.replace(/^(\d+) for \$?([\d,.]+)/g, priceDivide) // 2 for $10
