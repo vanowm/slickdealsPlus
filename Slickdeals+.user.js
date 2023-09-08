@@ -2,8 +2,8 @@
 // @name         Slickdeals+
 // @namespace    V@no
 // @description  Various enhancements
-// @include      https://slickdeals.net/*
-// @version      1.16.2
+// @match        https://slickdeals.net/*
+// @version      1.16.3
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -439,7 +439,29 @@ const processLinks = (node, force) =>
 		elLink.classList.add("notResolved");
 		if (SETTINGS.resolveLinks)
 		{
-			const dsLoading = document.documentElement.dataset;
+			const dsLoading = new Proxy([document.documentElement.dataset], {
+				get: (target, property) => target[0][property],
+				set: (target, property, value) =>
+				{
+					if (target.length === 1 && initMenu.elMenu)
+						target.push(initMenu.elMenu.dataset, initMenu.elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
+
+					for(let i = 0; i < target.length; i++)
+						target[i][property] = value;
+
+					return true;
+				},
+				deleteProperty: (target, property) =>
+				{
+					for(let i = 0; i < target.length; i++)
+					{
+						if (property in target[i])
+							delete target[i][property];
+					}
+
+					return true;
+				}
+			});
 			if (dsLoading.loading === undefined)
 				dsLoading.loading = 0;
 
@@ -559,6 +581,10 @@ const initMenu = elHeader =>
 	elLiMenu.classList.add("spd-menu");
 	elLiMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
 	elLiMenu.querySelector("p").textContent = "Slickdeals+";
+	const loading = document.documentElement.dataset.loading;
+	if (loading)
+		elLiMenu.dataset.loading = loading;
+
 	const elUl = elLiMenu.querySelector("ul");
 
 	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
@@ -589,6 +615,9 @@ const initMenu = elHeader =>
 	elLabel.textContent = "Resolved links";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
+	if (loading)
+		elLi.dataset.loading = loading;
+
 	elLi.append(elLabel);
 	elUl.append(elLi);
 
@@ -803,13 +832,31 @@ a:hover > a.origUrl
 	{
 		position: relative;
 	}
-	:root[data-loading] .spd-menu::after
+	:root[data-loading] .spd-menu::before
 	{
 		content: "⌛";
 		position: absolute;
 		right: 0.1em;
 		line-height: 2.5em;
 		animation: spin 1s linear infinite;
+	}
+	:root[data-loading] .spd-menu::after
+	{
+		content: attr(data-loading);
+		position: absolute;
+		text-align: center;
+		width: 1em;
+		height: 1em;
+		line-height: 1em;
+		top: 0.8em;
+		right: 0.1em;
+		color: black;
+		text-shadow: 1px 0 0 #fff,
+			0 1px 0 #fff,
+			-1px 0 0 #fff,
+			0 -1px 0 #fff,
+			0 0 0 #fff;
+	
 	}
 }
 
@@ -820,13 +867,30 @@ a:hover > a.origUrl
 		position: relative;
 		overflow: unset !important;
 	}
-	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::before
 	{
 		content: "⌛";
 		position: absolute;
 		right: -1.5em;
 		line-height: 2.0em;
 		animation: spin 1s linear infinite;
+	}
+	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+	{
+		content: attr(data-loading);
+		position: absolute;
+		text-align: center;
+		width: 1em;
+		height: 1em;
+		line-height: 1em;
+		top: 0.5em;
+		right: -1.5em;
+		color: black;
+		text-shadow: 1px 0 0 #fff,
+			0 1px 0 #fff,
+			-1px 0 0 #fff,
+			0 -1px 0 #fff,
+			0 0 0 #fff;
 	}
 }
 @keyframes spin {
