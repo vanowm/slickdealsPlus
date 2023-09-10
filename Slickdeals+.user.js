@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.16.3
+// @version      1.17
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -15,18 +15,364 @@
 if (window.top !== window.self)
 	return;
 
-const LocalStorageName = "slickdeals+";
-// upgrade from v1.12
-{
-	const oldData = localStorage.getItem("linksCache");
-	if (oldData)
-	{
-		localStorage.setItem(LocalStorageName, oldData);
-		localStorage.removeItem("linksCache");
-	}
-}
 const linksData = {};
 const processedMarker = "sdp"; //class name indicating that the element has already been processed
+/*------------[ ad blocking ]------------*/
+/**
+ * Removes ads from the DOM.
+ * @param {HTMLElement} parent - The HTML element to check for ads.
+ * @returns {void}
+ */
+const noAds = (function ()
+{
+	const fetch = window.fetch;
+	const open = XMLHttpRequest.prototype.open;
+
+	/**
+	 * Overrides the `fetch` method to intercept requests and block ads if necessary.
+	 */
+	window.fetch = function (...args)
+	{
+		const blocked = SETTINGS.noAds ? isAds(args[0]) : false;
+		if (SETTINGS.noAds)
+		{
+			debug("Slickdeals+%c fetch %c" + (blocked ? "blocked" : "allowed"), colors.fetch, colors[~~blocked], args, isAds.result);
+
+			if (blocked)
+				return new Promise((resolve, reject) => reject()).catch(() => {});
+		}
+		return Reflect.apply(fetch, this, args);
+	};
+
+	/**
+	 * Overrides the `open` method of `XMLHttpRequest` to intercept requests and block ads if necessary.
+	 */
+	XMLHttpRequest.prototype.open = function (...args)
+	{
+		const blocked = SETTINGS.noAds ? isAds(args[1]) : false;
+		if (SETTINGS.noAds)
+		{
+			debug("Slickdeals+%c XHR%c " + (blocked ? "blocked" : "allowed"), colors.xhr, colors[~~blocked], args, isAds.result);
+
+			if (blocked)
+				this.send = this.abort;
+		}
+		Reflect.apply(open, this, args);
+	};
+
+	/**
+	 * Overrides the specified properties of a prototype to intercept requests and block ads if necessary.
+	 * @param {Object} prototype - The prototype to override.
+	 * @param {(string|string[])} aName - The name(s) of the property to override.
+	 */
+	const setProperty = (prototype, aName) =>
+	{
+		if (!Array.isArray(aName))
+			aName = [aName];
+
+		for (let i = 0; i < aName.length; i++)
+		{
+			const name = aName[i];
+			const property = Object.getOwnPropertyDescriptor(prototype, name);
+
+			Object.defineProperty(prototype, name, {
+				get ()
+				{
+					return property.get.call(this);
+				},
+				set (value)
+				{
+					const isNoAds = SETTINGS.noAds;
+					const blocked = isNoAds ? isAds(name === "src" ? value : undefined, name === "src" ? undefined : value) : false;
+					if (isNoAds)
+					{
+						debug("Slickdeals+%c " + name + "%c " + (blocked ? "blocked" : "allowed"), colors[(name === "src" ? this.tagName.toLowerCase() : "") + name], colors[~~blocked], value, isAds.result, this);
+						if (blocked)
+							return;
+					}
+					property.set.call(this, value);
+				},
+				enumerable: property.enumerable || true,
+				configurable: property.configurable || true
+			});
+		}
+	};
+
+	/**
+	 * Overrides the specified methods of a prototype to intercept requests and block ads if necessary.
+	 * @param {Object} prototype - The prototype to override.
+	 * @param {Object} names - An object containing the names of the methods to override.
+	 */
+	const setPrototype = (prototype, names) =>
+	{
+		for (const name in names)
+		{
+			const _function = prototype[name];
+			prototype[name] = function (...args)
+			{
+				const isNoAds = SETTINGS.noAds;
+				for(let i = 0; i < args.length; i++)
+				{
+					if (!args[i] || (i && args[i] instanceof HTMLHeadElement))
+						continue;
+
+					const blocked = isNoAds ? isAds(args[i].src, args[i].innerHTML) : false;
+					if (isNoAds)
+					{
+						debug("Slickdeals+%c DOM_" + name + "%c " + (blocked ? "blocked" : "allowed"), colors.dom, colors[~~blocked], args[i], this, isAds.result);
+
+						if (blocked)
+						{
+							// args[i].innerHTML = "";
+							args[i].remove();
+							args.splice(i--, 1);
+							continue;
+						}
+					}
+				}
+				try
+				{
+					return Reflect.apply(_function, this, args);
+				}
+				catch{}
+			};
+		}
+	};
+	setProperty(Element.prototype, ["innerHTML", "outerHTML"]);
+	setProperty(HTMLElement.prototype, ["innerText", "outerText"]);
+	setProperty(Node.prototype, "textContent");
+	setProperty(HTMLScriptElement.prototype, "src");
+	setProperty(HTMLIFrameElement.prototype, "src");
+	setPrototype(Element.prototype, ["append", "prepend", "after", "before", "replaceWith", "insertBefore", "replaceChild", "appendChild", "prependChild", "insertAdjacentElement"]);
+	const property = Object.getOwnPropertyDescriptor(Element.prototype, "setAttribute");
+	Object.defineProperty(Element.prototype, "setAttribute", Object.assign(Object.assign({}, property), {
+		value: function (name, value)
+		{
+			const isNoAds = SETTINGS.noAds;
+			if (isNoAds && (this instanceof HTMLScriptElement || this instanceof HTMLIFrameElement) && name === "src")
+			{
+				const blocked = isNoAds ? isAds(value) : false;
+				debug("Slickdeals+%c " + name + "%c " + (blocked ? "blocked" : "allowed"), colors[(this.tagName.toLowerCase() || "") + name], colors[~~blocked], value, isAds.result, this);
+				if (blocked)
+				{
+					this.remove();
+					return;
+				}
+			}
+			property.value.call(this, name, value);
+			if (!(name === "href" && this instanceof HTMLAnchorElement))
+				return;
+
+			if (this._hrefResolved && this.href !== this._hrefResolved && this.href !== this._hrefOrig)
+				linkUpdate(this, this.href, true);
+			else if (SETTINGS.resolveLinks && !this.classList.contains("overlayUrl"))
+				processLinks([this], true);
+		},
+	}));
+
+	const list = {
+		blockUrlFull: new Set([
+			"/ad-stats/1/ad-events",
+			"https://v.clarity.ms/collect"
+		]),
+		blockText: [
+			/[.:-]ads(loader|[.:-])/i,
+			/google/,
+			/facebook/,
+			/heapanalytics/,
+			/demdex/,
+			/\.geq/,
+			/hydration/,
+			/qualtrics/
+		],
+		blockUrl: [
+			/\/providerv/,
+			/\/ad-\//,
+			/\.ad\./,
+			/\/ads(srvr|\/)/,
+			/\/pagecount/,
+			/\.quantcount/,
+			/btttag/,
+			/connect\.facebook/,
+			/heapanalytics/,
+			/click\./,
+			/adsystem/,
+			/bat\.bing/,
+			/\.clarity\./,
+			/hamburger\./,
+			/liadm\.com/,
+			/analytic/
+		],
+		blockHostname: [
+			/google/,
+			/videoplayerhub/i,
+			/btttag/
+		],
+
+		allowUrlFull: new Set([]),
+
+		allowUrl: [
+			/google\.com\/recaptcha\//,
+			// /accounts\.google\.com\//
+		],
+
+		allowHostname: [
+			/:\/\/slickdeals\.net\//
+		],
+		allowText: [
+			/vue\.createssrapp/i,
+			/frontpagecontroller/i, //Personalized Frontpage
+			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
+		]
+	};
+	const colors = {
+		0: "color:green",
+		1: "color:red",
+		fetch: "color:cyan",
+		xhr: "color:#88f",
+		script: "color:orange",
+		scriptsrc: "color:orange",
+		iframe: "color:#08f",
+		iframesrc: "color:#08f",
+		dom: "color:#576",
+		innerHTML: "color:#367"
+	};
+
+	/**
+	 * Checks if the given text matches any of the regular expressions in the specified type's list.
+	 * @param {string} text - The text to check.
+	 * @param {string} type - The type of list to check against.
+	 * @returns {boolean} True if the text matches any of the regular expressions in the list, false otherwise.
+	 */
+	const check = (text, type) =>
+	{
+		for(let i = 0, regex = list[type]; i < regex.length; i++)
+		{
+			const match = regex[i].exec(text);
+			if (!match)
+				continue;
+
+			isAds.result.result = match;
+			isAds.result.type = type;
+			isAds.result.filter = regex[i];
+			return true;
+		}
+		return false;
+	};
+
+	/**
+	 * Determines if a URL or text content is an advertisement.
+	 * @param {string} url - The URL to check.
+	 * @param {string} textContent - The text content to check.
+	 * @returns {boolean} Whether the URL or text content is an advertisement.
+	 */
+	const isAds = Object.assign((url, textContent) =>
+	{
+		let hostname = "";
+		try
+		{
+			hostname = url ? new URL(url).hostname : "";
+		}
+		catch
+		{
+			try
+			{
+				hostname = new URL(location.protocol + "//" + location.host + url).hostname;
+			}
+			catch(error)
+			{
+				debug.trace(url, error);
+			}
+		}
+		const result = Object.assign(isAds.result, {filter: "", result: "", type: ""});
+
+		if (list.allowUrlFull.has(url))
+		{
+			result.filter = url;
+			result.result = url;
+			result.type = "allowUrlFull";
+			return false;
+		}
+
+		if (list.blockUrlFull.has(url))
+		{
+			result.filter = url;
+			result.result = url;
+			result.type = "blockUrlFull";
+			return true;
+		}
+
+		if (hostname)
+		{
+
+			if (check(hostname, "allowHostname"))
+				return false;
+
+			if (check(url, "allowUrl"))
+				return false;
+
+			if (check(hostname, "blockHostname"))
+				return true;
+
+			if (check(url, "blockUrl"))
+				return true;
+		}
+		if (check(textContent, "allowText"))
+			return false;
+
+		if (check(textContent, "blockText"))
+			return true;
+
+		result.result = "";
+		result.filter = "";
+		result.type = "";
+		return false;
+	}, {result: {filter:"", result: "", type: ""}});
+
+	return parent =>
+	{
+		const nodes = [parent, ...parent.querySelectorAll("script,iframe")];
+		for(let i = 0; i < nodes.length; i++)
+		{
+			const node = nodes[i];
+			if (node.tagName === "IFRAME")
+			{
+				if (node.src && isAds(node.src))
+				{
+					debug("Slickdeals+%c iframe%c blocked", colors.iframe, colors[1], node.src, isAds.result, node);
+					node.remove();
+					continue;
+				}
+				debug("Slickdeals+%c iframe%c allowed", colors.iframe, colors[0], node.src, isAds.result, node);
+			}
+			// https://js.slickdealscdn.com/scripts/bundles/frontpage.js?9214
+			if (node.tagName === "SCRIPT")
+			{
+				const url = node.src;
+				const textContent = node.textContent;
+				if (isAds(url, textContent))
+				{
+					debug("Slickdeals+%c script%c blocked", colors.script, colors[1], url, textContent, isAds.result);
+					node.remove();
+					continue;
+				}
+				debug("Slickdeals+%c script%c allowed", colors.script, colors[0], url, textContent, isAds.result);
+			}
+			if (node.matches(".ablock,.adunit"))
+			{
+				if (node.parentElement.matches(".subBoxContent"))
+					node.parentElement.parentElement.remove();
+
+				node.parentElement.remove();
+			}
+			else if (node.matches("[data-role=rightRailBanner],[class*=bannerAd],[class*=Banner],[class*=ad-],[class*=contentAd],[data-adlocation]"))
+			{
+				node.remove();
+			}
+		}
+	};
+})();
+/*------------[ end ad blocking ]------------*/
 
 /**
  * Track changes in the DOM
@@ -35,14 +381,6 @@ new MutationObserver(mutations =>
 {
 	for (let i = 0; i < mutations.length; i++)
 	{
-		// do we need to worry about tracked links being changed?
-		// if (mutations[i].type === "attributes")
-		// {
-		// 	const el = mutations[i].target;
-		// 	//the tracking links can change dynamically, update them if they do
-		// 	if (el._hrefResolved && el.href !== el._hrefResolved && el.href !== el._hrefOrig)
-		// 		linkUpdate(el, el.href, true);
-		// }
 		for (let n = 0; n < mutations[i].addedNodes.length; n++)
 		{
 			const node = mutations[i].addedNodes[n];
@@ -50,34 +388,11 @@ new MutationObserver(mutations =>
 			if (!node.classList)
 				continue;
 
-			/* remove ads */
+			// remove ads
 			if (SETTINGS.noAds)
-			{
-				if (node.tagName === "IFRAME")
-				{
-					console.log("Slickdeals+ blocked iframe", node.src);
-					node.remove();
-					continue;
-				}
-				if (node.tagName === "SCRIPT"
-					&& ((node.src && !/slickdeals/.test(new URL(node.src).hostname))
-						|| /([.:-]ads(loader|[.:-])|banner)/i.test(node.textContent)))
-				{
-					console.log("Slickdeals+ blocked script", node.src);
-					node.remove();
-					continue;
-				}
+				noAds(node);
 
-				if (node.matches(".ablock,.adunit"))
-				{
-					if (node.parentElement.matches(".subBoxContent"))
-						node.parentElement.parentElement.remove();
-
-					node.parentElement.remove();
-				}
-			}
-			/* end remove ads */
-
+			//have we already processed this node?
 			if (node.classList.contains(processedMarker))
 				continue;
 
@@ -88,7 +403,7 @@ new MutationObserver(mutations =>
 				continue;
 			}
 			processCards(node);
-			processLinks(node);
+			// processLinks(node);
 		}
 		// for some reason attached menu is being removed...reattach it back if necessary
 		for(let n = 0; n < mutations[i].removedNodes.length; n++)
@@ -98,8 +413,7 @@ new MutationObserver(mutations =>
 
 		}
 	}
-}).observe(document, {
-	// attributeFilter: ["href"],
+}).observe(document.documentElement, {
 	subtree: true,
 	childList: true
 });
@@ -112,10 +426,19 @@ new MutationObserver(mutations =>
  */
 const SETTINGS = (() =>
 {
+	const LocalStorageName = "slickdeals+";
+	// upgrade from v1.12
+	const oldData = localStorage.getItem("linksCache");
+	if (oldData)
+	{
+		localStorage.setItem(LocalStorageName, oldData);
+		localStorage.removeItem("linksCache");
+	}
 	const dataDefault = {
 		freeOnly: 0, /* show free only */
 		resolveLinks: 1, /* use resolved links by default*/
-		noAds: 1 /* remove ads */
+		noAds: 1, /* remove ads */
+		debug: 0 /* debug mode */
 	};
 	let data = Object.assign({}, dataDefault);
 	try
@@ -141,6 +464,12 @@ const SETTINGS = (() =>
 			delete data[i];
 
 	}
+	//each setting is a class name
+	document.addEventListener("DOMContentLoaded", () =>
+	{
+		for(const i in data)
+			document.body.classList.toggle(i, !!data[i]);
+	});
 	const cache = new Map(Object.entries(data));
 	let timer;
 	let timeout;
@@ -190,9 +519,9 @@ const SETTINGS = (() =>
 
 		cache.set(id, value);
 		if (id === "resolveLinks")
-		{
 			updateLinks();
-		}
+
+		document.body.classList.toggle(id, !!value);
 		save();
 	},
 	{
@@ -204,24 +533,6 @@ const SETTINGS = (() =>
 		}
 	});
 })();
-
-const updateLinks = () =>
-{
-	if (SETTINGS.resolveLinks)
-	{
-		const nlList = $$(".notResolved", document.body, true);
-		if (nlList.length > 0)
-			processLinks(nlList, true);
-	}
-	for(const id in linksData)
-	{
-		const aLinks = linksData[id];
-		for(let i = 0; i < aLinks.length; i++)
-		{
-			linkUpdate(aLinks[i], undefined, true);
-		}
-	}
-};
 
 /**
  * Returns the first element that is a descendant of node that matches selectors.
@@ -269,7 +580,7 @@ const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.re
  * Extracts pricing information from a given node and its children.
  * @param {HTMLElement|NodeList} node - The root node or NodeList to search for pricing information.
  * @param {boolean} [force=false] - Whether to force processing of already processed items.
- * @returns {Array} An array of objects containing pricing information for each item found.
+ * @returns void
  */
 const processCards = (node, force) =>
 {
@@ -284,7 +595,6 @@ const processCards = (node, force) =>
 				`.dealPrice:not(.${processed})`
 		, node, true) || [];
 
-	// const result = [];
 	for (let i = 0; i < nlItems.length; i++)
 	{
 		const elPrice = nlItems[i];
@@ -340,12 +650,7 @@ const processCards = (node, force) =>
 			"div[data-role='frontpageDealContent']"
 		);
 		if (elCard)
-		{
-			if (priceFree)
-				elCard.setAttribute("free", "");
-			else
-				elCard.removeAttribute("free");
-		}
+			elCard.classList.toggle("free", priceFree);
 
 		if (!Number.isNaN(priceDealPercent))
 		{
@@ -358,18 +663,14 @@ const processCards = (node, force) =>
 				elCard.dataset.dealPercent = priceDealPercent;
 			}
 		}
-		// result.push({
-		// 	item: item,
-		// 	price: price,
-		// 	priceNew : priceNew,
-		// 	priceRetail: priceRetail,
-		// 	priceOld: priceOld
-		// });
-
-		// console.log({price, priceNew, priceRetail, priceOld, priceDealPercent, elItem, elCard});
 	}
-	// return result;
 };
+
+/**
+ * Logs debug information to the console if debug mode is enabled.
+ * @param {...*} args - The arguments to log to the console.
+ */
+const debug = Object.assign(SETTINGS.debug ? console.log.bind(console) : () => {}, {trace: console.trace.bind(console)});
 
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
@@ -380,13 +681,12 @@ const processCards = (node, force) =>
 const processLinks = (node, force) =>
 {
 	const processed = (force ? "-" : "") + processedMarker;
-	const nlLinks = node instanceof NodeList ? node : $$(`a:not(.${processed})`, node, true) || [];
-
+	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not(.${processed}):not(.overlayUrl)`, node, true) || [];
 	for(let i = 0; i < nlLinks.length; i++)
 	{
 		const elLink = nlLinks[i];
 
-		if (elLink._hrefResolved)
+		if (elLink._hrefResolved && !force)
 			continue;
 
 		elLink.classList.add(processedMarker);
@@ -399,7 +699,7 @@ const processLinks = (node, force) =>
 			elLink._hrefOrig = elLink.href;
 			const elHover = document.createElement("a");
 			elHover.href = elLink._hrefOrig;
-			elHover.classList.add(processedMarker, "origUrl", "hidden");
+			elHover.classList.add(processedMarker, "overlayUrl", "hidden");
 			elHover.title = "Original link";
 			elHover.target = elLink.target;
 			elLink.append(elHover);
@@ -500,6 +800,7 @@ const processLinks = (node, force) =>
  * Updates a link with a new URL and styling to indicate that it has been resolved.
  * @param {HTMLAnchorElement} elA - The link to update.
  * @param {string} url - The new URL to set on the link.
+ * @returns {void}
  */
 const linkUpdate = (elA, url, update) =>
 {
@@ -511,26 +812,53 @@ const linkUpdate = (elA, url, update) =>
 		elA._hrefResolved = url;
 
 	elA.classList.toggle("notResolved", !elA._hrefResolved);
-	const elHover = elA.querySelector("a.origUrl");
+	const elHover = elA.querySelector("a.overlayUrl");
 	if (SETTINGS.resolveLinks && elA._hrefResolved)
 	{
-		elHover.title = "Original link";
-		elHover.href = elA._hrefOrig;
-		elHover.classList.remove("hidden");
+		if (elHover)
+		{
+			elHover.title = "Original link";
+			elHover.href = elA._hrefOrig;
+			elHover.classList.remove("hidden");
+		}
 		elA.href = elA._hrefResolved;
 		elA.classList.add("resolved");
 		elA.classList.remove("tracked");
 	}
 	else
 	{
-		elHover.classList.toggle("hidden", !elA._hrefResolved);
-		elHover.title = "Resolved link";
-		elHover.href = elA._hrefResolved;
+		if (elHover)
+		{
+			elHover.classList.toggle("hidden", !elA._hrefResolved);
+			elHover.title = "Resolved link";
+			elHover.href = elA._hrefResolved;
+		}
 		elA.href = elA._hrefOrig;
 		elA.classList.add("tracked");
 		elA.classList.remove("resolved");
 	}
 	// a.title = a._hrefResolved;
+};
+
+/**
+ * Updates all unresolved links on the page.
+ */
+const updateLinks = () =>
+{
+	if (SETTINGS.resolveLinks)
+	{
+		const nlList = $$(".notResolved", document.body, true);
+		if (nlList.length > 0)
+			processLinks(nlList, true);
+	}
+	for(const id in linksData)
+	{
+		const aLinks = linksData[id];
+		for(let i = 0; i < aLinks.length; i++)
+		{
+			linkUpdate(aLinks[i], undefined, true);
+		}
+	}
 };
 
 /**
@@ -573,69 +901,129 @@ const getUrlInfo = url =>
 	return {id: matchIDS[5], type: matchIDS[4]};
 };
 
-const initMenu = elHeader =>
+/**
+ * Initializes the Slickdeals+ menu.
+ * @param {HTMLElement} elNav - The navigation element to use as the menu container.
+ */
+const initMenu = elNav =>
 {
 	// header.firstChild.firstChild.style.padding = 0;
-	let elLabel;
-	const elLiMenu = elHeader.lastElementChild.cloneNode(true);
-	elLiMenu.classList.add("spd-menu");
-	elLiMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
-	elLiMenu.querySelector("p").textContent = "Slickdeals+";
+	let elMenuItem;
+	const elMenu = elNav.lastElementChild.cloneNode(true);
+	initMenu.elMenu = elMenu;
+	initMenu.elHeader = elNav;
+	const elHeader = elNav.closest("header");
+	const elOverlay = document.createElement("div");
+	initMenu.elOverlay = elOverlay;
+	for (const i in elMenu.dataset)
+	{
+		if (/^v-\d/.test(i))
+			elOverlay.dataset[i] = elMenu.dataset[i];
+	}
+	initMenu.elOverlay.className = "slickdealsHeader__overlay";
+
+	elMenu.classList.add("spd-menu");
+	elMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
+	elMenu.querySelector("p").textContent = "Slickdeals+";
+	const elUl = elMenu.querySelector("ul");
+	const elButton = elMenu.querySelector("div[role='button']");
+	elMenu.addEventListener("mousedown", evt =>
+	{
+		const isMenu = evt.target === elButton || evt.target.parentElement === elButton;
+		const isMenuOpen = (document.activeElement.closest(".spd-menu > div[role='button']") || {}) === elButton;
+
+		if (isMenu && isMenuOpen)
+		{
+			evt.preventDefault();
+			evt.stopPropagation();
+			elOverlay.click();
+		}
+	});
+
+	elButton.addEventListener("focus", () => elHeader.after(elOverlay), true);
+	elButton.addEventListener("blur", () => elOverlay.remove(), true);
+	elOverlay.addEventListener("click", () =>
+	{
+		elButton.focus();
+		elButton.blur();
+		elOverlay.remove();
+	});
 	const loading = document.documentElement.dataset.loading;
 	if (loading)
-		elLiMenu.dataset.loading = loading;
-
-	const elUl = elLiMenu.querySelector("ul");
+		elMenu.dataset.loading = loading;
 
 	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
 	const elLiDefault = elUl.querySelector("li").cloneNode(true);
 	const dataset = Object.keys(elLiDefault.firstElementChild.dataset)[0];
 	elUl.innerHTML = "";
 	elLiDefault.innerHTML = "";
-	elHeader.append(elLiMenu);
+	elNav.append(elMenu);
 
 	let elLi;
 
 	let id = "freeOnly";
-	elLabel = checkbox(id).label;
-	elLabel.dataset[dataset] = "";
-	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
-	elLabel.title = "Only show free items";
-	elLabel.textContent = "Free Only";
+	elMenuItem = menuItem(id);
+	elMenuItem.dataset[dataset] = "";
+	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
+	elMenuItem.title = "Only show free items";
+	elMenuItem.textContent = "Free Only";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
-	elLi.append(elLabel);
+	elLi.append(elMenuItem);
 	elUl.append(elLi);
 
 	id = "resolveLinks";
-	elLabel = checkbox(id).label;
-	elLabel.dataset[dataset] = "";
-	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
-	elLabel.title = "Use resolved links";
-	elLabel.textContent = "Resolved links";
+	elMenuItem = menuItem(id);
+	elMenuItem.dataset[dataset] = "";
+	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
+	elMenuItem.title = "Use resolved links";
+	elMenuItem.textContent = "Resolved links";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
 	if (loading)
 		elLi.dataset.loading = loading;
 
-	elLi.append(elLabel);
+	elLi.append(elMenuItem);
 	elUl.append(elLi);
 
 	id = "noAds";
-	elLabel = checkbox(id).label;
-	elLabel.dataset[dataset] = "";
-	elLabel.classList.add("slickdealsHeaderDropdownItem__link");
-	elLabel.title = "Block ads. Require page refresh";
-	elLabel.textContent = "No ads";
-	// elLabel.setAttribute("label", "No ads");
+	elMenuItem = menuItem(id);
+	elMenuItem.dataset[dataset] = "";
+	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
+	elMenuItem.title = "Block ads. Require page refresh";
+	elMenuItem.textContent = "No ads";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
-	elLi.append(elLabel);
-	// elBefore.before(elLi);
+	elLi.append(elMenuItem);
 	elUl.append(elLi);
-	initMenu.elMenu = elLiMenu;
-	initMenu.elHeader = elHeader;
 };
+
+/**
+ * Creates a menu item element with a label and style.
+ * @param {string} id - The ID of the menu item.
+ * @returns {HTMLElement} The menu item element.
+ */
+const menuItem = id =>
+{
+	const elMenuItem = document.createElement("a");
+	elMenuItem.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
+	elMenuItem.addEventListener("keypress", evt =>
+	{
+		if (evt.key === " " || evt.key === "Enter")
+		{
+			evt.preventDefault();
+			evt.stopPropagation();
+			SETTINGS(id, ~~!SETTINGS(id));
+		}
+	});
+	elMenuItem.id = id;
+	elMenuItem.setAttribute("tabindex", 0);
+	const elStyle = document.createElement("style");
+	elStyle.textContent = `body.${id} #${id}::before{content:"☑";}`;
+	document.head.append(elStyle);
+	return elMenuItem;
+};
+
 /**
  * The main function that runs when the page is loaded.
  */
@@ -658,26 +1046,8 @@ const main = () =>
 		processCards(elPageContent);
 		processLinks(elPageContent);
 	}
-	console.log(GM_info.script.name, "v" + GM_info.script.version, "initialized");
+	debug(GM_info.script.name, "v" + GM_info.script.version, "initialized");
 };//main()
-
-const checkbox = id =>
-{
-	const elInput = document.createElement("input");
-	const elLabel = document.createElement("label");
-	elInput.type = "checkbox";
-	elInput.id = id;
-	elInput.checked = SETTINGS[id];
-	elInput.className = "hidden";
-	elInput.addEventListener("input", () => SETTINGS(id, ~~elInput.checked));
-	elLabel.setAttribute("for", id);
-	elLabel.className = id;
-	document.body.insertBefore(elInput, document.body.firstChild);
-	const elStyle = document.createElement("style");
-	elStyle.textContent = `#${id}:checked ~ * label.${id}::before{content:"☑";}`;
-	document.head.append(elStyle);
-	return {label: elLabel, input: elInput};
-};
 
 if (document.readyState === "complete")
 	main();
@@ -687,7 +1057,7 @@ else
 	window.addEventListener("load", main, false);
 }
 })(`
-a.resolved:not(.seeDealButton)
+a.resolved:not(.seeDealButton):not(.button.success)
 {
 	color: #00b309;
 }
@@ -705,40 +1075,43 @@ a.resolved:not(.seeDealButton)
 	--buttonBackgroundColor: #06551a;
 }
 
-div[free],
-li[free]
+div.free,
+li.free
 {
-	box-shadow: 0 0 10px red;
 	background-color: #ffdde0 !important;
+	animation: pulse .5s infinite alternate;
 }
-#freeOnly:checked ~ * label.freeOnly
-{
-	text-shadow: 0 0 20px #f00;
 
-}
-body.darkMode div[free],
-body.darkMode li[free]
+@keyframes pulse
 {
-	box-shadow: 0 0 10px red;
+	from { box-shadow: 0 0 1em red;}
+	to {box-shadow: 0 0 0.5em red;}
+}
+body.darkMode div.free,
+body.darkMode li.free
+{
 	background-color: #861614 !important;
-	/* color: black; */
 }
-#fpMainContent .gridCategory .fpGridBox.list[free],
-#fpMainContent .gridCategory .fpGridBox.simple[free]
+
+#fpMainContent .gridCategory .fpGridBox.list.free,
+#fpMainContent .gridCategory .fpGridBox.simple.free
 {
-	margin: 5px;
+	margin: 0.5em;
 }
+
 #fpMainContent .gridCategory .grid .fpItem .itemInfoLine .avatarBox,
 #fpMainContent .gridCategory ul.gridDeals .fpGridBox .itemInfoLine .avatarBox,
 #fpMainContent .gridCategory .grid .fpItem.isPersonalizedDeal .itemBottomRow .comments
 {
 	display: initial !important;
 }
+
 #fpMainContent .gridCategory ul.gridDeals .fpGridBox .itemInfoLine .avatarBox
 {
 	float: right;
 	position: initial;
 }
+
 #fpMainContent .gridCategory ul.gridDeals .fpGridBox .fpItem .itemBottomRow .comments
 {
 	display: initial !important;
@@ -746,15 +1119,16 @@ body.darkMode li[free]
 	right: -2.5em;
 	bottom: 5em;
 }
-a.origUrl
+
+a.overlayUrl
 {
 	position: relative;
 	height: 1em;
 	display: none;
 }
 
-a.origUrl::before,
-a.origUrl::after
+a.overlayUrl::before,
+a.overlayUrl::after
 {
 	content: "";
 	position: absolute;
@@ -763,12 +1137,12 @@ a.origUrl::after
 
 }
 
-a.origUrl::after
+a.overlayUrl::after
 {
 	width: 2.2em;
 }
 
-a.origUrl::before
+a.overlayUrl::before
 {
 	width: 1.3em;
 	border-radius: 0.5em;
@@ -781,39 +1155,37 @@ a.origUrl::before
 	opacity: 0.5;
 }
 
-a.origUrl:hover::before
+a.overlayUrl:hover::before
 {
 	opacity: 1;
 }
 
-a:hover > a.origUrl
+a:hover > a.overlayUrl
 {
 	display: inline;
 }
-.omegaBanner,
-.frontpageGrid__bannerAd,
-.frontpageSlickdealsGrid__bannerAd,
+
 .hidden
 {
 	display: none !important;
 }
 
-#freeOnly:checked ~ * .frontpageRecommendationCarousel li:not([free]),
-#freeOnly:checked ~ * .dealTiles li:not([free]),
-#freeOnly:checked ~ * .bp-p-categoryPage_main li:not([free]), /* https://slickdeals.net/deals/*** */
-#freeOnly:checked ~ * .frontpageGrid li:not([free])
+body.freeOnly .frontpageRecommendationCarousel li:not(.free),
+body.freeOnly .dealTiles li:not(.free),
+body.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
+body.freeOnly .frontpageGrid li:not(.free)
 {
 	display: none;
 }
 
 /* checkboxes */
 
-.spd-menu .slickdealsHeaderDropdownItem > label
+.spd-menu .slickdealsHeaderDropdownItem
 {
 	cursor: pointer;
 }
 
-.spd-menu .slickdealsHeaderDropdownItem > label::before
+.spd-menu .slickdealsHeaderDropdownItem > a::before
 {
 	content: "☐";
 	display: inline-block;
@@ -826,6 +1198,16 @@ a:hover > a.origUrl
 
 /* end checkboxes */
 
+:root[data-loading] .spd-menu::before,
+:root[data-loading] .spd-menu::after,
+:root[data-loading] .spd-menu .slickdealsHeader__navItemText::before,
+:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+{
+	position: absolute;
+	z-index: 1;
+	pointer-events: none;
+}
+
 @media (min-width: 1024px)
 {
 	:root[data-loading] .spd-menu
@@ -835,7 +1217,6 @@ a:hover > a.origUrl
 	:root[data-loading] .spd-menu::before
 	{
 		content: "⌛";
-		position: absolute;
 		right: 0.1em;
 		line-height: 2.5em;
 		animation: spin 1s linear infinite;
@@ -843,10 +1224,8 @@ a:hover > a.origUrl
 	:root[data-loading] .spd-menu::after
 	{
 		content: attr(data-loading);
-		position: absolute;
 		text-align: center;
 		width: 1em;
-		height: 1em;
 		line-height: 1em;
 		top: 0.8em;
 		right: 0.1em;
@@ -870,7 +1249,6 @@ a:hover > a.origUrl
 	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::before
 	{
 		content: "⌛";
-		position: absolute;
 		right: -1.5em;
 		line-height: 2.0em;
 		animation: spin 1s linear infinite;
@@ -878,7 +1256,6 @@ a:hover > a.origUrl
 	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
 	{
 		content: attr(data-loading);
-		position: absolute;
 		text-align: center;
 		width: 1em;
 		height: 1em;
@@ -893,6 +1270,7 @@ a:hover > a.origUrl
 			0 0 0 #fff;
 	}
 }
+
 @keyframes spin {
 	100% {
 		transform: rotate(360deg);
@@ -903,6 +1281,7 @@ a:hover > a.origUrl
 {
 	display: unset !important;
 }
+
 .dealDetailsPriceInfo[data-deal-diff]
 {
 	position: relative;
@@ -915,6 +1294,7 @@ a:hover > a.origUrl
 	flex-wrap: wrap;
 	align-items: center;
 }
+
 .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/*** */
 .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
 a[data-deal-diff]::after /* deal list page */
@@ -923,10 +1303,12 @@ a[data-deal-diff]::after /* deal list page */
 	font-style: italic;
 	height: 1em;
 }
+
 @media (min-width: 768px) {
 	.dealCard__content {
 		grid-template-rows:auto 67px auto 1fr 20px !important;
 	}
 }
+
 `/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Ⲟ,ꓳ,𐊒)=>([24,16,8,0].forEach(𐓂=>(𐊒=parseInt(ꓳ,36)>>𐓂&255,Ⲟ+=String.fromCharCode(𐊒))),Ⲟ),""));
