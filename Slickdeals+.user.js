@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.17
+// @version      1.17.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -113,21 +113,17 @@ const noAds = (function ()
 				const isNoAds = SETTINGS.noAds;
 				for(let i = 0; i < args.length; i++)
 				{
-					if (!args[i] || (i && args[i] instanceof HTMLHeadElement))
+					if (!isNoAds || !args[i] || (i && args[i] instanceof HTMLHeadElement))
 						continue;
 
-					const blocked = isNoAds ? isAds(args[i].src, args[i].innerHTML) : false;
-					if (isNoAds)
-					{
-						debug("Slickdeals+%c DOM_" + name + "%c " + (blocked ? "blocked" : "allowed"), colors.dom, colors[~~blocked], args[i], this, isAds.result);
+					const blocked = isAds(args[i].src, args[i].innerHTML);
 
-						if (blocked)
-						{
-							// args[i].innerHTML = "";
-							args[i].remove();
-							args.splice(i--, 1);
-							continue;
-						}
+					debug("Slickdeals+%c DOM_" + name + "%c " + (blocked ? "blocked" : "allowed"), colors.dom, colors[~~blocked], args[i], this, isAds.result);
+
+					if (blocked)
+					{
+						args[i].remove();
+						args.splice(i--, 1);
 					}
 				}
 				try
@@ -335,7 +331,7 @@ const noAds = (function ()
 		for(let i = 0; i < nodes.length; i++)
 		{
 			const node = nodes[i];
-			if (node.tagName === "IFRAME")
+			if (node instanceof HTMLIFrameElement)
 			{
 				if (node.src && isAds(node.src))
 				{
@@ -346,7 +342,7 @@ const noAds = (function ()
 				debug("Slickdeals+%c iframe%c allowed", colors.iframe, colors[0], node.src, isAds.result, node);
 			}
 			// https://js.slickdealscdn.com/scripts/bundles/frontpage.js?9214
-			if (node.tagName === "SCRIPT")
+			if (node instanceof HTMLScriptElement)
 			{
 				const url = node.src;
 				const textContent = node.textContent;
@@ -977,7 +973,7 @@ const initMenu = elNav =>
 	elMenuItem.dataset[dataset] = "";
 	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
 	elMenuItem.title = "Use resolved links";
-	elMenuItem.textContent = "Resolved links";
+	elMenuItem.textContent = "Resolve links";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
 	if (loading)
@@ -990,7 +986,7 @@ const initMenu = elNav =>
 	elMenuItem = menuItem(id);
 	elMenuItem.dataset[dataset] = "";
 	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
-	elMenuItem.title = "Block ads. Require page refresh";
+	elMenuItem.title = "Block ads (require page reload)";
 	elMenuItem.textContent = "No ads";
 	elLi = elLiDefault.cloneNode(true);
 	elLi.classList.add(id);
