@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.17.1
+// @version      1.17.2
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -16,7 +16,7 @@ if (window.top !== window.self)
 	return;
 
 const linksData = {};
-const processedMarker = "sdp"; //class name indicating that the element has already been processed
+const processedMarker = "©"; //class name indicating that the element has already been processed
 /*------------[ ad blocking ]------------*/
 /**
  * Removes ads from the DOM.
@@ -39,7 +39,7 @@ const noAds = (function ()
 			debug("Slickdeals+%c fetch %c" + (blocked ? "blocked" : "allowed"), colors.fetch, colors[~~blocked], args, isAds.result);
 
 			if (blocked)
-				return new Promise((resolve, reject) => reject()).catch(() => {});
+				return Promise.reject(new Response("", {status: 403, statusText: "Blocked"})).catch(() => {});
 		}
 		return Reflect.apply(fetch, this, args);
 	};
@@ -463,7 +463,7 @@ const SETTINGS = (() =>
 	//each setting is a class name
 	document.addEventListener("DOMContentLoaded", () =>
 	{
-		for(const i in data)
+		for(const i in dataDefault)
 			document.body.classList.toggle(i, !!data[i]);
 	});
 	const cache = new Map(Object.entries(data));
