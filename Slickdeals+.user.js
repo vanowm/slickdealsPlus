@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.17.3
+// @version      1.17.4
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -39,7 +39,7 @@ const noAds = (function ()
 			debug("Slickdeals+%c fetch %c" + (blocked ? "blocked" : "allowed"), colors.fetch, colors[~~blocked], args, isAds.result);
 
 			if (blocked)
-				return Promise.reject(new Response("", {status: 403, statusText: "Blocked"})).catch(() => {});
+				return Promise.resolve(new Response("", {status: 403, statusText: "Blocked"}));
 		}
 		return Reflect.apply(fetch, this, args);
 	};
@@ -171,22 +171,17 @@ const noAds = (function ()
 			"/ad-stats/1/ad-events",
 			"https://v.clarity.ms/collect"
 		]),
-		blockText: [
-			/[.:-]ads(loader|[.:-])/i,
+		blockHostname: [
 			/google/,
-			/facebook/,
-			/heapanalytics/,
-			/demdex/,
-			/\.geq/,
-			/hydration/,
-			/qualtrics/
+			/videoplayerhub/i,
+			/btttag/,
+			/schemaapp\.com/,
 		],
 		blockUrl: [
 			/\/providerv/,
 			/\/ad-\//,
 			/\.ad\./,
 			/\/ads(srvr|\/)/,
-			/\/pagecount/,
 			/\.quantcount/,
 			/btttag/,
 			/connect\.facebook/,
@@ -199,21 +194,26 @@ const noAds = (function ()
 			/liadm\.com/,
 			/analytic/
 		],
-		blockHostname: [
+		blockText: [
+			/[.:-]ads(loader|[.:-])/i,
 			/google/,
-			/videoplayerhub/i,
-			/btttag/
+			/facebook/,
+			/heapanalytics/,
+			/demdex/,
+			/\.geq/,
+			/hydration/,
+			/qualtrics/,
+			/adsrvr\./
 		],
 
 		allowUrlFull: new Set([]),
 
+		allowHostname: [
+			/:\/\/slickdeals\.net\//
+		],
 		allowUrl: [
 			/google\.com\/recaptcha\//,
 			// /accounts\.google\.com\//
-		],
-
-		allowHostname: [
-			/:\/\/slickdeals\.net\//
 		],
 		allowText: [
 			/vue\.createssrapp/i,
