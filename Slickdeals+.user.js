@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.17.2
+// @version      1.17.3
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -580,15 +580,15 @@ const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.re
  */
 const processCards = (node, force) =>
 {
-	const processed = (force ? "-" : "") + processedMarker;
+	const processed = force ? "" : ":not(." + processedMarker + ")";
 	const nlItems = node instanceof NodeList
 		? node
-		: $$(	`.salePrice:not(.${processed}),` +
-				`.itemPrice:not(.${processed}),` +
-				`.price:not(.${processed}),` +
-				`.bp-p-dealCard_price:not(.${processed}),` + // https://slickdeals.net/deals/watches/
-				`.dealCard__price:not(.${processed}),` +
-				`.dealPrice:not(.${processed})`
+		: $$(	`.salePrice${processed},` +
+				`.itemPrice${processed},` +
+				`.price${processed},` +
+				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
+				`.dealCard__price${processed},` +
+				`.dealPrice${processed}`
 		, node, true) || [];
 
 	for (let i = 0; i < nlItems.length; i++)
@@ -676,8 +676,8 @@ const debug = Object.assign(SETTINGS.debug ? console.log.bind(console) : () => {
  */
 const processLinks = (node, force) =>
 {
-	const processed = (force ? "-" : "") + processedMarker;
-	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not(.${processed}):not(.overlayUrl)`, node, true) || [];
+	const processed = force ? "" : ":not(." + processedMarker + ")";
+	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a${processed}:not(.overlayUrl)`, node, true) || [];
 	for(let i = 0; i < nlLinks.length; i++)
 	{
 		const elLink = nlLinks[i];
