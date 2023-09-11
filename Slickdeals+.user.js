@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.18
+// @version      1.18.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -155,7 +155,7 @@ const noAds = (function ()
 		const blocked = SETTINGS.noAds ? isAds(args[0]) : false;
 		if (SETTINGS.noAds)
 		{
-			debug("Slickdeals+%c fetch %c" + (blocked ? "blocked" : "allowed"), colors.fetch, colors[~~blocked], args, isAds.result);
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c fetch", colors[~~blocked], colors.fetch, args, isAds.result);
 
 			if (blocked)
 				return Promise.resolve(new Response("", {status: 403, statusText: "Blocked"}));
@@ -171,7 +171,7 @@ const noAds = (function ()
 		const blocked = SETTINGS.noAds ? isAds(args[1]) : false;
 		if (SETTINGS.noAds)
 		{
-			debug("Slickdeals+%c XHR%c " + (blocked ? "blocked" : "allowed"), colors.xhr, colors[~~blocked], args, isAds.result);
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c XHR", colors[~~blocked], colors.xhr, args, isAds.result);
 
 			if (blocked)
 				this.send = this.abort;
@@ -181,6 +181,7 @@ const noAds = (function ()
 
 	/**
 	 * Overrides the specified properties of a prototype to intercept requests and block ads if necessary.
+	 * @function
 	 * @param {Object} prototype - The prototype to override.
 	 * @param {(string|string[])} aName - The name(s) of the property to override.
 	 */
@@ -202,10 +203,11 @@ const noAds = (function ()
 				set (value)
 				{
 					const isNoAds = SETTINGS.noAds;
-					const blocked = isNoAds ? isAds(name === "src" ? value : undefined, name === "src" ? undefined : value) : false;
+					const isSource = name === "src";
+					const blocked = isNoAds ? isAds(isSource ? value : undefined, isSource ? undefined : value) : false;
 					if (isNoAds)
 					{
-						debug("Slickdeals+%c " + name + "%c " + (blocked ? "blocked" : "allowed"), colors[(name === "src" ? this.tagName.toLowerCase() : "") + name], colors[~~blocked], value, isAds.result, this);
+						debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name, colors[~~blocked], colors[(name === "src" ? this.tagName.toLowerCase() : "") + name], value, isAds.result, this);
 						if (blocked)
 							return;
 					}
@@ -218,47 +220,52 @@ const noAds = (function ()
 	};
 
 	/**
+	 * Returns a function that intercepts requests and blocks ads if necessary.
+	 * @function
+	 * @param {string} name - The name of the function.
+	 * @param {Function} _function - The function to intercept.
+	 * @returns {Function} The intercepted function.
+	 */
+	const getPrototypeFunction = (name, _function) => function (...args)
+	{
+		const isNoAds = SETTINGS.noAds;
+		for(let i = 0; i < args.length; i++)
+		{
+			if (!isNoAds || !args[i] || (i && args[i] instanceof HTMLHeadElement))
+				continue;
+
+			const blocked = isAds(args[i].src, args[i].innerHTML);
+
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c DOM_" + name, colors[~~blocked], colors.dom, args[i], this, isAds.result);
+
+			if (blocked)
+			{
+				args[i].remove();
+				args.splice(i--, 1);
+			}
+		}
+		try
+		{
+			return Reflect.apply(_function, this, args);
+		}
+		catch{}
+	};
+
+	/**
 	 * Overrides the specified methods of a prototype to intercept requests and block ads if necessary.
+	 * @function
 	 * @param {Object} prototype - The prototype to override.
 	 * @param {Object} names - An object containing the names of the methods to override.
 	 */
 	const setPrototype = (prototype, names) =>
 	{
 		for (const name in names)
-		{
-			const _function = prototype[name];
-			prototype[name] = function (...args)
-			{
-				const isNoAds = SETTINGS.noAds;
-				for(let i = 0; i < args.length; i++)
-				{
-					if (!isNoAds || !args[i] || (i && args[i] instanceof HTMLHeadElement))
-						continue;
-
-					const blocked = isAds(args[i].src, args[i].innerHTML);
-
-					debug("Slickdeals+%c DOM_" + name + "%c " + (blocked ? "blocked" : "allowed"), colors.dom, colors[~~blocked], args[i], this, isAds.result);
-
-					if (blocked)
-					{
-						args[i].remove();
-						args.splice(i--, 1);
-					}
-				}
-				try
-				{
-					return Reflect.apply(_function, this, args);
-				}
-				catch{}
-			};
-		}
+			prototype[name] = getPrototypeFunction(name, prototype[name]);
 	};
 	setProperty(Element.prototype, ["innerHTML", "outerHTML"]);
-	setProperty(HTMLElement.prototype, ["innerText", "outerText"]);
-	setProperty(Node.prototype, "textContent");
 	setProperty(HTMLScriptElement.prototype, "src");
 	setProperty(HTMLIFrameElement.prototype, "src");
-	setPrototype(Element.prototype, ["append", "prepend", "after", "before", "replaceWith", "insertBefore", "replaceChild", "appendChild", "prependChild", "insertAdjacentElement"]);
+	setPrototype(Element.prototype, ["append", "prepend", "after", "before", "replaceWith", "replaceChild", "insertBefore", "appendChild", "prependChild", "insertAdjacentElement"]);
 	const property = Object.getOwnPropertyDescriptor(Element.prototype, "setAttribute");
 	Object.defineProperty(Element.prototype, "setAttribute", Object.assign(Object.assign({}, property), {
 		value: function (name, value)
@@ -267,7 +274,7 @@ const noAds = (function ()
 			if (isNoAds && (this instanceof HTMLScriptElement || this instanceof HTMLIFrameElement) && name === "src")
 			{
 				const blocked = isNoAds ? isAds(value) : false;
-				debug("Slickdeals+%c " + name + "%c " + (blocked ? "blocked" : "allowed"), colors[(this.tagName.toLowerCase() || "") + name], colors[~~blocked], value, isAds.result, this);
+				debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c " + name, colors[~~blocked], colors[(this.tagName.toLowerCase() || "") + name], value, isAds.result, this);
 				if (blocked)
 				{
 					this.remove();
@@ -275,7 +282,7 @@ const noAds = (function ()
 				}
 			}
 			property.value.call(this, name, value);
-			if (!(name === "href" && this instanceof HTMLAnchorElement))
+			if (name !== "href" || !(this instanceof HTMLAnchorElement))
 				return;
 
 			if (this._hrefResolved && this.href !== this._hrefResolved && this.href !== this._hrefOrig)
@@ -350,7 +357,8 @@ const noAds = (function ()
 		iframe: "color:#08f",
 		iframesrc: "color:#08f",
 		dom: "color:#576",
-		innerHTML: "color:#367"
+		innerHTML: "color:#357",
+		outerHTML: "color:#056"
 	};
 
 	/**
@@ -452,15 +460,18 @@ const noAds = (function ()
 		for(let i = 0; i < nodes.length; i++)
 		{
 			const node = nodes[i];
+			isAds.result.result = "";
+			isAds.result.filter = "";
+			isAds.result.type = "";
 			if (node instanceof HTMLIFrameElement)
 			{
 				if (node.src && isAds(node.src))
 				{
-					debug("Slickdeals+%c iframe%c blocked", colors.iframe, colors[1], node.src, isAds.result, node);
+					debug("%cSlickdeals+ blocked%c iframe" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.iframe, node.src, isAds.result, node);
 					node.remove();
 					continue;
 				}
-				debug("Slickdeals+%c iframe%c allowed", colors.iframe, colors[0], node.src, isAds.result, node);
+				debug("%cSlickdeals+ allowed%c iframe", colors[0], colors.iframe, node.src, isAds.result, node);
 			}
 			// https://js.slickdealscdn.com/scripts/bundles/frontpage.js?9214
 			if (node instanceof HTMLScriptElement)
@@ -469,11 +480,11 @@ const noAds = (function ()
 				const textContent = node.textContent;
 				if (isAds(url, textContent))
 				{
-					debug("Slickdeals+%c script%c blocked", colors.script, colors[1], url, textContent, isAds.result);
+					debug("%cSlickdeals+ blocked%c script" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.script, url, textContent, isAds.result);
 					node.remove();
 					continue;
 				}
-				debug("Slickdeals+%c script%c allowed", colors.script, colors[0], url, textContent, isAds.result);
+				debug("%cSlickdeals+ allowed%c script", colors[0], colors.script, url, textContent, isAds.result);
 			}
 			if (node.matches(".ablock,.adunit"))
 			{
@@ -746,70 +757,70 @@ const processLinks = (node, force) =>
 			return;
 
 		elLink.classList.add("notResolved");
-		if (SETTINGS.resolveLinks)
-		{
-			const dsLoading = new Proxy([document.documentElement.dataset], {
-				get: (target, property) => target[0][property],
-				set: (target, property, value) =>
+		if (!SETTINGS.resolveLinks)
+			return;
+
+		const dsLoading = new Proxy([document.documentElement.dataset], {
+			get: (target, property) => target[0][property],
+			set: (target, property, value) =>
+			{
+				if (target.length === 1 && initMenu.elMenu)
+					target.push(initMenu.elMenu.dataset, initMenu.elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
+
+				for(let i = 0; i < target.length; i++)
+					target[i][property] = value;
+
+				return true;
+			},
+			deleteProperty: (target, property) =>
+			{
+				for(let i = 0; i < target.length; i++)
 				{
-					if (target.length === 1 && initMenu.elMenu)
-						target.push(initMenu.elMenu.dataset, initMenu.elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
-
-					for(let i = 0; i < target.length; i++)
-						target[i][property] = value;
-
-					return true;
-				},
-				deleteProperty: (target, property) =>
-				{
-					for(let i = 0; i < target.length; i++)
-					{
-						if (property in target[i])
-							delete target[i][property];
-					}
-
-					return true;
+					if (property in target[i])
+						delete target[i][property];
 				}
-			});
-			if (dsLoading.loading === undefined)
-				dsLoading.loading = 0;
 
-			dsLoading.loading++;
-			/**
-			 * Resolves a URL using the Slickdeals API.
-			 * @function
-			 * @param {string} id - The ID of the deal to resolve.
-			 * @param {string} type - The type of the deal to resolve.
-			 * @param {string} url - The URL to resolve.
-			 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
-			 */
-			resolveUrl(id, type, elLink._hrefOrig)
-				.then(data =>
+				return true;
+			}
+		});
+		if (dsLoading.loading === undefined)
+			dsLoading.loading = 0;
+
+		dsLoading.loading++;
+		/**
+		 * Resolves a URL using the Slickdeals API.
+		 * @function
+		 * @param {string} id - The ID of the deal to resolve.
+		 * @param {string} type - The type of the deal to resolve.
+		 * @param {string} url - The URL to resolve.
+		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
+		 */
+		resolveUrl(id, type, elLink._hrefOrig)
+			.then(data =>
+			{
+				if (!data)
+					throw new Error("No data:" + data);
+
+				if (id === data.id
+					&& type === data.type
+					&& data.url
+					&& !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
 				{
-					if (!data)
-						throw new Error("No data:" + data);
+					SETTINGS(id + type, data.url);
+					for(let i = 0; i < aLinks.length; i++)
+						linkUpdate(aLinks[i], data.url);
 
-					if (id === data.id
-						&& type === data.type
-						&& data.url
-						&& !/^https:\/\/(www\.)?slickdeals.net\/\?/i.test(data.url))
-					{
-						SETTINGS(id + type, data.url);
-						for(let i = 0; i < aLinks.length; i++)
-							linkUpdate(aLinks[i], data.url);
+					aLinks.resolved = true;
+				}
+				return data;
+			})
+			.finally(() =>
+			{
+				if (!--dsLoading.loading)
+					delete dsLoading.loading;
 
-						aLinks.resolved = true;
-					}
-					return data;
-				})
-				.finally(() =>
-				{
-					if (!--dsLoading.loading)
-						delete dsLoading.loading;
-
-				})
-				.catch(console.error);
-		}
+			})
+			.catch(console.error);
 	}
 };
 
@@ -1153,7 +1164,7 @@ a.overlayUrl::before
 {
 	width: 1.3em;
 	border-radius: 0.5em;
-	background-color: #ffffff7f;
+	background-color: #ffffff9f;
 	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9ImN1cnJlbnRDb2xvciIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pbllNaW4gbWVldCIgdmlld0JveD0iMCAwIDEwIDExIj4KICA8cGF0aCBmaWxsPSJpbmhlcml0IiBkPSJtOC40NjUuNTQ2Ljk5Ljk5YTEuODcgMS44NyAwIDAgMS0uMDAyIDIuNjRsLTEuMzIgMS4zMmExLjQxMiAxLjQxMiAwIDAgMS0xLjUyNS4zMDMuNDY3LjQ2NyAwIDAgMSAuMzU3LS44NjJjLjE3NC4wNy4zNzQuMDMuNTA5LS4xMDJsMS4zMjEtMS4zMTdhLjkzMy45MzMgMCAwIDAgMC0xLjMybC0uOTktLjk5YS45MzMuOTMzIDAgMCAwLTEuMzIgMGwtMS4zMiAxLjMyYS40NjcuNDY3IDAgMCAwLS4xLjUwNi40NjcuNDY3IDAgMSAxLS44NjMuMzU3IDEuNDAzIDEuNDAzIDAgMCAxIC4zMDMtMS41MjZsMS4zMi0xLjMyYTEuODcgMS44NyAwIDAgMSAyLjY0IDBaIi8+CiAgPHBhdGggZmlsbD0iaW5oZXJpdCIgZD0iTTMuMDIgNi45OGEuNDcuNDcgMCAwIDAgLjY2IDBsMy42My0zLjYzYS40NjcuNDY3IDAgMCAwLS42Ni0uNjZMMy4wMiA2LjMyYS40NjcuNDY3IDAgMCAwIDAgLjY2WiIvPgogIDxwYXRoIGZpbGw9ImluaGVyaXQiIGQ9Ik01LjE5IDYuMzU3YS40NjcuNDY3IDAgMCAwLS4yNTMuNjEuNDY3LjQ2NyAwIDAgMS0uMTAyLjUwOGwtMS4zMiAxLjMyYS45MzMuOTMzIDAgMCAxLTEuMzIgMGwtLjk5LS45OWEuOTMzLjkzMyAwIDAgMSAwLTEuMzJsMS4zMjItMS4zMmEuNDczLjQ3MyAwIDAgMSAuNTEtLjEuNDY3LjQ2NyAwIDAgMCAuMzU1LS44NjQgMS40MTYgMS40MTYgMCAwIDAtMS41MjUuMzA1TC41NDYgNS44MjZhMS44NyAxLjg3IDAgMCAwIDAgMi42NGwuOTkuOTljLjcyOS43MjggMS45MS43MjggMi42NCAwbDEuMzItMS4zMmMuNC0uNDAxLjUyLTEuMDAzLjMwMy0xLjUyN2EuNDY3LjQ2NyAwIDAgMC0uNjEtLjI1MloiLz4KPC9zdmc+");
 	background-position: center;
 	background-repeat: no-repeat;
@@ -1164,6 +1175,7 @@ a.overlayUrl::before
 
 a.overlayUrl:hover::before
 {
+	background-color: #ffffff;
 	opacity: 1;
 }
 
