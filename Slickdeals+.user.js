@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.17.4
+// @version      1.18
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,9 +17,128 @@ if (window.top !== window.self)
 
 const linksData = {};
 const processedMarker = "©"; //class name indicating that the element has already been processed
+
+/**
+ * A function that reads and writes data to the browser's local storage.
+ * @function
+ * @param {string} id - The ID of the data to read or write.
+ * @param {*} [value] - The value to write to the specified ID. If not provided, the function will read the value at the specified ID.
+ * @returns void
+ */
+const SETTINGS = (() =>
+{
+	const LocalStorageName = "slickdeals+";
+	// upgrade from v1.12
+	const oldData = localStorage.getItem("linksCache");
+	if (oldData)
+	{
+		localStorage.setItem(LocalStorageName, oldData);
+		localStorage.removeItem("linksCache");
+	}
+	const dataDefault = {
+		freeOnly: 0, /* show free only */
+		resolveLinks: 1, /* use resolved links by default*/
+		noAds: 1, /* remove ads */
+		debug: 0 /* debug mode */
+	};
+	let data = Object.assign({}, dataDefault);
+	try
+	{
+		Object.assign(data, JSON.parse(localStorage.getItem(LocalStorageName)));
+	}
+	catch{}
+	if (Object.prototype.toString.call(data) !== "[object Object]")
+		data = Object.assign({}, dataDefault);
+
+	/* clean up old settings */
+	const reg = /^\d/;
+	for(const i in data)
+	{
+		if (reg.test(i))
+			continue;
+
+		/* upgrade from v1.14 */
+		if (i === "resolvedClick")
+			data.resolveLinks = data[i];
+
+		if (!Object.prototype.hasOwnProperty.call(dataDefault, i))
+			delete data[i];
+
+	}
+	//each setting is a class name
+	document.addEventListener("DOMContentLoaded", () =>
+	{
+		for(const i in dataDefault)
+			document.body.classList.toggle(i, !!data[i]);
+	});
+	const cache = new Map(Object.entries(data));
+	let timer;
+	let timeout;
+	/**
+	 * Saves the data in the cache to the browser's local storage.
+	 * @function
+	 * @param {number} [attempt=0] - The number of times the function has attempted to save the data.
+	 */
+	const save = (attempt = 0) =>
+	{
+		clearTimeout(timeout);
+		const now = Date.now();
+		if (timer + 300 > now)
+		{
+			timeout = setTimeout(() => save(attempt), 300);
+			return;
+		}
+		try
+		{
+			// try save settings, if it fails, remove previous items until it succeeds
+			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(cache)));
+		}
+		catch
+		{
+			//removing in batches exponentially
+			for(let i = 0, key, keys = cache.keys(), count = ++attempt ** 2; i < count; i++)
+			{
+				do
+				{
+					key = keys.next().value;
+				}
+				while(key && !/^\d/.test(key)); //don't remove non-numeric keys
+
+				cache.delete(key);
+			}
+
+			if (attempt < 10_000)
+				return save(attempt);
+
+		}
+		timer = now;
+	};
+
+	return new Proxy((id, value) =>
+	{
+		if (value === undefined)
+			return cache.get(id);
+
+		cache.set(id, value);
+		if (id === "resolveLinks")
+			updateLinks();
+
+		document.body.classList.toggle(id, !!value);
+		save();
+	},
+	{
+		get: (target, id) => target(id),
+		set: (target, id, value) =>
+		{
+			target(id, value);
+			return true;
+		}
+	});
+})();
 /*------------[ ad blocking ]------------*/
 /**
  * Removes ads from the DOM.
+ * @function
  * @param {HTMLElement} parent - The HTML element to check for ads.
  * @returns {void}
  */
@@ -236,6 +355,7 @@ const noAds = (function ()
 
 	/**
 	 * Checks if the given text matches any of the regular expressions in the specified type's list.
+	 * @function
 	 * @param {string} text - The text to check.
 	 * @param {string} type - The type of list to check against.
 	 * @returns {boolean} True if the text matches any of the regular expressions in the list, false otherwise.
@@ -258,6 +378,7 @@ const noAds = (function ()
 
 	/**
 	 * Determines if a URL or text content is an advertisement.
+ 	 * @function
 	 * @param {string} url - The URL to check.
 	 * @param {string} textContent - The text content to check.
 	 * @returns {boolean} Whether the URL or text content is an advertisement.
@@ -371,7 +492,9 @@ const noAds = (function ()
 /*------------[ end ad blocking ]------------*/
 
 /**
- * Track changes in the DOM
+ * MutationObserver callback function that tracks changes in the DOM.
+ * @function
+ * @param {MutationRecord[]} mutations - An array of MutationRecord objects representing the changes in the DOM.
  */
 new MutationObserver(mutations =>
 {
@@ -409,129 +532,14 @@ new MutationObserver(mutations =>
 
 		}
 	}
-}).observe(document.documentElement, {
+}).observe(document, {
 	subtree: true,
 	childList: true
 });
 
 /**
- * A function that reads and writes data to the browser's local storage.
- * @param {string} id - The ID of the data to read or write.
- * @param {*} [value] - The value to write to the specified ID. If not provided, the function will read the value at the specified ID.
- * @returns void
- */
-const SETTINGS = (() =>
-{
-	const LocalStorageName = "slickdeals+";
-	// upgrade from v1.12
-	const oldData = localStorage.getItem("linksCache");
-	if (oldData)
-	{
-		localStorage.setItem(LocalStorageName, oldData);
-		localStorage.removeItem("linksCache");
-	}
-	const dataDefault = {
-		freeOnly: 0, /* show free only */
-		resolveLinks: 1, /* use resolved links by default*/
-		noAds: 1, /* remove ads */
-		debug: 0 /* debug mode */
-	};
-	let data = Object.assign({}, dataDefault);
-	try
-	{
-		Object.assign(data, JSON.parse(localStorage.getItem(LocalStorageName)));
-	}
-	catch{}
-	if (Object.prototype.toString.call(data) !== "[object Object]")
-		data = Object.assign({}, dataDefault);
-
-	/* clean up old settings */
-	const reg = /^\d/;
-	for(const i in data)
-	{
-		if (reg.test(i))
-			continue;
-
-		/* upgrade from v1.14 */
-		if (i === "resolvedClick")
-			data.resolveLinks = data[i];
-
-		if (!Object.prototype.hasOwnProperty.call(dataDefault, i))
-			delete data[i];
-
-	}
-	//each setting is a class name
-	document.addEventListener("DOMContentLoaded", () =>
-	{
-		for(const i in dataDefault)
-			document.body.classList.toggle(i, !!data[i]);
-	});
-	const cache = new Map(Object.entries(data));
-	let timer;
-	let timeout;
-	/**
-	 * Saves the data in the cache to the browser's local storage.
-	 * @param {number} [attempt=0] - The number of times the function has attempted to save the data.
-	 */
-	const save = (attempt = 0) =>
-	{
-		clearTimeout(timeout);
-		const now = Date.now();
-		if (timer + 300 > now)
-		{
-			timeout = setTimeout(() => save(attempt), 300);
-			return;
-		}
-		try
-		{
-			// try save settings, if it fails, remove previous items until it succeeds
-			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(cache)));
-		}
-		catch
-		{
-			//removing in batches exponentially
-			for(let i = 0, key, keys = cache.keys(), count = ++attempt ** 2; i < count; i++)
-			{
-				do
-				{
-					key = keys.next().value;
-				}
-				while(key && !/^\d/.test(key)); //don't remove non-numeric keys
-
-				cache.delete(key);
-			}
-
-			if (attempt < 10_000)
-				return save(attempt);
-
-		}
-		timer = now;
-	};
-
-	return	new Proxy((id, value) =>
-	{
-		if (value === undefined)
-			return cache.get(id);
-
-		cache.set(id, value);
-		if (id === "resolveLinks")
-			updateLinks();
-
-		document.body.classList.toggle(id, !!value);
-		save();
-	},
-	{
-		get: (target, id) => target(id),
-		set: (target, id, value) =>
-		{
-			target(id, value);
-			return true;
-		}
-	});
-})();
-
-/**
  * Returns the first element that is a descendant of node that matches selectors.
+ * @function
  * @param {string} id - The ID of the element to find.
  * @param {HTMLElement} node - The root node to search for the element.
  * @param {boolean} all - Whether to return all elements that match the selector.
@@ -558,6 +566,7 @@ const $$ = (id, node, all) =>
 
 /**
  * Converts input into a string and trims whitespace.
+ * @function
  * @param {string} t - The string to trim.
  * @returns {string} The trimmed string.
  */
@@ -565,6 +574,7 @@ const trim = t => ("" + t).trim();
 
 /**
  * Divides a price by a specified divider and formats it as a string with a dollar sign and two decimal places.
+ * @function
  * @param {string} _text - The text to prepend to the formatted price.
  * @param {string} divider - The value to divide the price by.
  * @param {string} price - The price to divide and format.
@@ -574,6 +584,7 @@ const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.re
 
 /**
  * Extracts pricing information from a given node and its children.
+ * @function
  * @param {HTMLElement|NodeList} node - The root node or NodeList to search for pricing information.
  * @param {boolean} [force=false] - Whether to force processing of already processed items.
  * @returns void
@@ -664,12 +675,14 @@ const processCards = (node, force) =>
 
 /**
  * Logs debug information to the console if debug mode is enabled.
+ * @function
  * @param {...*} args - The arguments to log to the console.
  */
 const debug = Object.assign(SETTINGS.debug ? console.log.bind(console) : () => {}, {trace: console.trace.bind(console)});
 
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
+ * @function
  * @param {HTMLElement|NodeList} node - The root node or NodeList to search for links to fix.
  * @param {boolean} [force=false] - Whether to force processing of already processed links.
  * @returns {void}
@@ -762,6 +775,14 @@ const processLinks = (node, force) =>
 				dsLoading.loading = 0;
 
 			dsLoading.loading++;
+			/**
+			 * Resolves a URL using the Slickdeals API.
+			 * @function
+			 * @param {string} id - The ID of the deal to resolve.
+			 * @param {string} type - The type of the deal to resolve.
+			 * @param {string} url - The URL to resolve.
+			 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
+			 */
 			resolveUrl(id, type, elLink._hrefOrig)
 				.then(data =>
 				{
@@ -794,6 +815,7 @@ const processLinks = (node, force) =>
 
 /**
  * Updates a link with a new URL and styling to indicate that it has been resolved.
+ * @function
  * @param {HTMLAnchorElement} elA - The link to update.
  * @param {string} url - The new URL to set on the link.
  * @returns {void}
@@ -838,7 +860,8 @@ const linkUpdate = (elA, url, update) =>
 
 /**
  * Updates all unresolved links on the page.
- */
+ * @function
+*/
 const updateLinks = () =>
 {
 	if (SETTINGS.resolveLinks)
@@ -859,6 +882,7 @@ const updateLinks = () =>
 
 /**
  * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
+ * @function
  * @param {string} id - The ID of the deal to resolve.
  * @param {string} type - The type of the deal to resolve.
  * @param {string} url - The URL to resolve.
@@ -870,6 +894,7 @@ const resolveUrl = (id, type, url) => fetch(api + id + type, {method: "POST", he
 
 /**
  * Extracts the ID and type of a deal from a given URL.
+ * @function
  * @param {string} url - The URL to extract the ID and type from.
  * @returns {Object|boolean} An object containing the ID and type of the deal, or false if no ID or type could be found.
  */
@@ -897,14 +922,53 @@ const getUrlInfo = url =>
 	return {id: matchIDS[5], type: matchIDS[4]};
 };
 
+let initMenuCounter = 1000;
 /**
  * Initializes the Slickdeals+ menu.
+ * @function
  * @param {HTMLElement} elNav - The navigation element to use as the menu container.
  */
 const initMenu = elNav =>
 {
-	// header.firstChild.firstChild.style.padding = 0;
-	let elMenuItem;
+	if (elNav.children.length < 4 && --initMenuCounter)
+		return setTimeout(() => initMenu(elNav), 0);
+
+	/**
+	 * Creates a menu item element with a label and style.
+	 * @function
+	 * @param {string} id - The ID of the menu item.
+	 * @param {string} text - The text to display for the menu item.
+	 * @param {string} description - The description to display for the menu item.
+	 * @returns {HTMLElement} The menu item element.
+	 */
+	const createMenuItem = (id, text, description) =>
+	{
+		const elA = document.createElement("a");
+		elA.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
+		elA.addEventListener("keypress", evt =>
+		{
+			if (evt.key === " " || evt.key === "Enter")
+			{
+				evt.preventDefault();
+				evt.stopPropagation();
+				SETTINGS(id, ~~!SETTINGS(id));
+			}
+		});
+		elA.id = id;
+		elA.textContent = text;
+		elA.title = description;
+		elA.setAttribute("tabindex", 0);
+		elA.classList.add("slickdealsHeaderDropdownItem__link");
+		elA.dataset[dataset] = "";
+		const elLi = elLiDefault.cloneNode(true);
+		elLi.classList.add(id);
+		elLi.append(elA);
+
+		const elStyle = document.createElement("style");
+		elStyle.textContent = `body.${id} #${id}::before{content:"☑";}`;
+		document.head.append(elStyle);
+		return elLi;
+	};
 	const elMenu = elNav.lastElementChild.cloneNode(true);
 	initMenu.elMenu = elMenu;
 	initMenu.elHeader = elNav;
@@ -923,6 +987,9 @@ const initMenu = elNav =>
 	elMenu.querySelector("p").textContent = "Slickdeals+";
 	const elUl = elMenu.querySelector("ul");
 	const elButton = elMenu.querySelector("div[role='button']");
+
+	elButton.addEventListener("focus", () => elHeader.after(elOverlay), true);
+	elButton.addEventListener("blur", () => elOverlay.remove(), true);
 	elMenu.addEventListener("mousedown", evt =>
 	{
 		const isMenu = evt.target === elButton || evt.target.parentElement === elButton;
@@ -935,9 +1002,6 @@ const initMenu = elNav =>
 			elOverlay.click();
 		}
 	});
-
-	elButton.addEventListener("focus", () => elHeader.after(elOverlay), true);
-	elButton.addEventListener("blur", () => elOverlay.remove(), true);
 	elOverlay.addEventListener("click", () =>
 	{
 		elButton.focus();
@@ -945,8 +1009,6 @@ const initMenu = elNav =>
 		elOverlay.remove();
 	});
 	const loading = document.documentElement.dataset.loading;
-	if (loading)
-		elMenu.dataset.loading = loading;
 
 	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
 	const elLiDefault = elUl.querySelector("li").cloneNode(true);
@@ -955,73 +1017,22 @@ const initMenu = elNav =>
 	elLiDefault.innerHTML = "";
 	elNav.append(elMenu);
 
-	let elLi;
-
-	let id = "freeOnly";
-	elMenuItem = menuItem(id);
-	elMenuItem.dataset[dataset] = "";
-	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
-	elMenuItem.title = "Only show free items";
-	elMenuItem.textContent = "Free Only";
-	elLi = elLiDefault.cloneNode(true);
-	elLi.classList.add(id);
-	elLi.append(elMenuItem);
-	elUl.append(elLi);
-
-	id = "resolveLinks";
-	elMenuItem = menuItem(id);
-	elMenuItem.dataset[dataset] = "";
-	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
-	elMenuItem.title = "Use resolved links";
-	elMenuItem.textContent = "Resolve links";
-	elLi = elLiDefault.cloneNode(true);
-	elLi.classList.add(id);
+	elUl.append(createMenuItem("freeOnly", "Free Only", "Only show free items"));
+	const elMenuItem = createMenuItem("resolveLinks", "Resolve links", "Use resolved links");
 	if (loading)
-		elLi.dataset.loading = loading;
-
-	elLi.append(elMenuItem);
-	elUl.append(elLi);
-
-	id = "noAds";
-	elMenuItem = menuItem(id);
-	elMenuItem.dataset[dataset] = "";
-	elMenuItem.classList.add("slickdealsHeaderDropdownItem__link");
-	elMenuItem.title = "Block ads (require page reload)";
-	elMenuItem.textContent = "No ads";
-	elLi = elLiDefault.cloneNode(true);
-	elLi.classList.add(id);
-	elLi.append(elMenuItem);
-	elUl.append(elLi);
-};
-
-/**
- * Creates a menu item element with a label and style.
- * @param {string} id - The ID of the menu item.
- * @returns {HTMLElement} The menu item element.
- */
-const menuItem = id =>
-{
-	const elMenuItem = document.createElement("a");
-	elMenuItem.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
-	elMenuItem.addEventListener("keypress", evt =>
 	{
-		if (evt.key === " " || evt.key === "Enter")
-		{
-			evt.preventDefault();
-			evt.stopPropagation();
-			SETTINGS(id, ~~!SETTINGS(id));
-		}
-	});
-	elMenuItem.id = id;
-	elMenuItem.setAttribute("tabindex", 0);
-	const elStyle = document.createElement("style");
-	elStyle.textContent = `body.${id} #${id}::before{content:"☑";}`;
-	document.head.append(elStyle);
-	return elMenuItem;
+		elMenu.dataset.loading = loading;
+		elMenuItem.dataset.loading = loading;
+	}
+	elUl.append(elMenuItem);
+	elUl.append(createMenuItem("noAds", "No ads", "Block ads (require page reload)"));
+	// elUl.append(createMenuItem("debug", "Debug", "Show debug messages in the console"));
 };
 
 /**
- * The main function that runs when the page is loaded.
+ * The main function that initializes the Slickdeals+ script.
+ * @function
+ * @returns {void}
  */
 const main = () =>
 {
@@ -1305,6 +1316,5 @@ a[data-deal-diff]::after /* deal list page */
 		grid-template-rows:auto 67px auto 1fr 20px !important;
 	}
 }
-
-`/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, space-infix-ops, unicorn/prefer-number-properties, unicorn/no-array-for-each, no-shadow, unicorn/prefer-code-point*/,
-"szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Ⲟ,ꓳ,𐊒)=>([24,16,8,0].forEach(𐓂=>(𐊒=parseInt(ꓳ,36)>>𐓂&255,Ⲟ+=String.fromCharCode(𐊒))),Ⲟ),""));
+`/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, unicorn/no-array-for-each, space-infix-ops, unicorn/prefer-code-point, unicorn/prefer-number-properties*/,
+"szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
