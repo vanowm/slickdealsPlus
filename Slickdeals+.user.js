@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.18.1
+// @version      1.18.2
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -345,6 +345,7 @@ const noAds = (function ()
 			/vue\.createssrapp/i,
 			/frontpagecontroller/i, //Personalized Frontpage
 			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
+			/SECURITYTOKEN/,
 		]
 	};
 	const colors = {
