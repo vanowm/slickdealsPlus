@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.18.2
+// @version      1.18.3
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -39,7 +39,8 @@ const SETTINGS = (() =>
 		freeOnly: 0, /* show free only */
 		resolveLinks: 1, /* use resolved links by default*/
 		noAds: 1, /* remove ads */
-		debug: 0 /* debug mode */
+		debug: 2, /* debug mode: 0 = off, 1 = on, 2 = off and hide menu */
+		version: "" /* placeholder */
 	};
 	let data = Object.assign({}, dataDefault);
 	try
@@ -65,6 +66,44 @@ const SETTINGS = (() =>
 			delete data[i];
 
 	}
+
+	/**
+	 * Compares two version strings and returns -1, 0, or 1
+	 * depending on whether the first version is less than, equal to, or greater than the second version.
+	 *
+	 * @function
+	 * @see {@link https://jsfiddle.net/vanowm/p7uvtbor/ jsFiddle}
+	 * @param {string|number} a - The first version string or number to compare.
+	 * @param {string|number} b - The second version string or number to compare.
+	 * @returns {number} -1 if the first version is less than the second,
+	 *                    0 if they are equal, or
+	 *                    1 if the first version is greater than the second.
+	 */
+	const compareVersion = (prep =>
+		(a, b, _a = prep(a), _b = prep(b), length = Math.max(_a.length, _b.length), result = 0, i = 0) =>
+		{
+			while (!result && i < length)
+				result = (~~_a[i] || 0) - (~~_b[i++] || 0);
+
+			return result < 0 ? -1 : (result > 0 ? 1 : 0);
+		})(t => ("" + t)
+		// eslint-disable-next-line unicorn/prefer-code-point
+		.replace(/[^\d.]+/g, c => "." + (c.replace(/[\W_]+/, "").toUpperCase().charCodeAt() - 65_536) + ".")
+		.replace(/(?:\.0+)*(\.-\d+(?:\.\d+)?)\.*$/g, "$1")
+		.split("."));
+
+	const updated = data.version !== GM_info.script.version;
+	// eslint-disable-next-line sonarjs/no-collapsible-if
+	if (updated)
+	{
+		// eslint-disable-next-line unicorn/no-lonely-if
+		if (compareVersion(data.version, "1.18.3") < 0)
+		{
+			data.debug = data.debug ? 1 : 2;
+		}
+	}
+
+	data.version = GM_info.script.version;
 	//each setting is a class name
 	document.addEventListener("DOMContentLoaded", () =>
 	{
@@ -114,6 +153,9 @@ const SETTINGS = (() =>
 		timer = now;
 	};
 
+	if (updated)
+		save();
+
 	return new Proxy((id, value) =>
 	{
 		if (value === undefined)
@@ -135,6 +177,7 @@ const SETTINGS = (() =>
 		}
 	});
 })();
+
 /*------------[ ad blocking ]------------*/
 /**
  * Removes ads from the DOM.
@@ -292,7 +335,24 @@ const noAds = (function ()
 		},
 	}));
 
+	// allow* supersedes block*
 	const list = {
+		allowUrlFull: new Set([]),
+
+		allowHostname: [
+			/:\/\/slickdeals\.net\//
+		],
+		allowUrl: [
+			/google\.com\/recaptcha\//,
+			// /accounts\.google\.com\//
+		],
+		allowText: [
+			/vue\.createssrapp/i,
+			/frontpagecontroller/i, //Personalized Frontpage
+			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
+			/SECURITYTOKEN/, //voting
+		],
+
 		blockUrlFull: new Set([
 			"/ad-stats/1/ad-events",
 			"https://v.clarity.ms/collect"
@@ -329,24 +389,9 @@ const noAds = (function ()
 			/\.geq/,
 			/hydration/,
 			/qualtrics/,
-			/adsrvr\./
+			/adsrvr\./,
+			/announcementBar/ //top banner
 		],
-
-		allowUrlFull: new Set([]),
-
-		allowHostname: [
-			/:\/\/slickdeals\.net\//
-		],
-		allowUrl: [
-			/google\.com\/recaptcha\//,
-			// /accounts\.google\.com\//
-		],
-		allowText: [
-			/vue\.createssrapp/i,
-			/frontpagecontroller/i, //Personalized Frontpage
-			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
-			/SECURITYTOKEN/,
-		]
 	};
 	const colors = {
 		0: "color:green",
@@ -690,7 +735,7 @@ const processCards = (node, force) =>
  * @function
  * @param {...*} args - The arguments to log to the console.
  */
-const debug = Object.assign(SETTINGS.debug ? console.log.bind(console) : () => {}, {trace: console.trace.bind(console)});
+const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : () => {}, {trace: console.trace.bind(console)});
 
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
@@ -1038,7 +1083,8 @@ const initMenu = elNav =>
 	}
 	elUl.append(elMenuItem);
 	elUl.append(createMenuItem("noAds", "No ads", "Block ads (require page reload)"));
-	// elUl.append(createMenuItem("debug", "Debug", "Show debug messages in the console"));
+	if (SETTINGS.debug < 2)
+		elUl.append(createMenuItem("debug", "Debug", "Show debug messages in the console"));
 };
 
 /**
@@ -1049,7 +1095,6 @@ const initMenu = elNav =>
 const main = () =>
 {
 	window.removeEventListener("DOMContentLoaded", main, false);
-	window.removeEventListener("load", main, false);
 
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
@@ -1068,13 +1113,7 @@ const main = () =>
 	debug(GM_info.script.name, "v" + GM_info.script.version, "initialized");
 };//main()
 
-if (document.readyState === "complete")
-	main();
-else
-{
-	window.addEventListener("DOMContentLoaded", main, false);
-	window.addEventListener("load", main, false);
-}
+window.addEventListener("DOMContentLoaded", main, false);
 })(`
 a.resolved:not(.seeDealButton):not(.button.success)
 {
@@ -1328,6 +1367,9 @@ a[data-deal-diff]::after /* deal list page */
 	.dealCard__content {
 		grid-template-rows:auto 67px auto 1fr 20px !important;
 	}
+}
+.pageContent--reserveAnnouncementBar { /* top banner */
+	padding-top: 0 !important;
 }
 `/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, unicorn/no-array-for-each, space-infix-ops, unicorn/prefer-code-point, unicorn/prefer-number-properties*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
