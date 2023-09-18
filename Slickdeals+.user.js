@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.18.3
+// @version      1.18.4
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -87,7 +87,6 @@ const SETTINGS = (() =>
 
 			return result < 0 ? -1 : (result > 0 ? 1 : 0);
 		})(t => ("" + t)
-		// eslint-disable-next-line unicorn/prefer-code-point
 		.replace(/[^\d.]+/g, c => "." + (c.replace(/[\W_]+/, "").toUpperCase().charCodeAt() - 65_536) + ".")
 		.replace(/(?:\.0+)*(\.-\d+(?:\.\d+)?)\.*$/g, "$1")
 		.split("."));
@@ -662,6 +661,7 @@ const processCards = (node, force) =>
 	for (let i = 0; i < nlItems.length; i++)
 	{
 		const elPrice = nlItems[i];
+		elPrice.title = elPrice.textContent;
 		elPrice.classList.add(processedMarker);
 		let elParent = elPrice.parentNode;
 		const price = trim(elPrice.textContent);
@@ -673,7 +673,7 @@ const processCards = (node, force) =>
 			else if (/^[\s\w]*~?\$/.test(price))
 			{
 				priceNew = Number.parseFloat(price
-					.replace(/^(\d+) for \$?([\d,.]+)/g, priceDivide) // 2 for $10
+					.replace(/^(?:from )?(\d+) for \$?([\d,.]+)/g, priceDivide) // 2 for $10
 					.replace(/[^\d,.]/g, "") // remove non-numeric characters
 					.replace(/,/g, "")); // remove commas
 			}
@@ -726,6 +726,7 @@ const processCards = (node, force) =>
 				elCard.dataset.dealDiff = diff;
 				elCard.dataset.dealPercent = priceDealPercent;
 			}
+			elParent.title = "Save $" + diff + " (" + priceDealPercent + "%)";
 		}
 	}
 };
@@ -806,7 +807,12 @@ const processLinks = (node, force) =>
 		if (!SETTINGS.resolveLinks)
 			return;
 
-		const dsLoading = new Proxy([document.documentElement.dataset], {
+		/**
+		 * Set dataset values to multiple elements at once.
+		 *
+		 * @type {Proxy}
+		 */
+		const datasets = new Proxy([document.documentElement.dataset], {
 			get: (target, property) => target[0][property],
 			set: (target, property, value) =>
 			{
@@ -829,12 +835,13 @@ const processLinks = (node, force) =>
 				return true;
 			}
 		});
-		if (dsLoading.loading === undefined)
-			dsLoading.loading = 0;
+		if (datasets.loading === undefined)
+			datasets.loading = 0;
 
-		dsLoading.loading++;
+		datasets.loading++;
+
 		/**
-		 * Resolves a URL using the Slickdeals API.
+		 * Resolves a URL
 		 * @function
 		 * @param {string} id - The ID of the deal to resolve.
 		 * @param {string} type - The type of the deal to resolve.
@@ -862,8 +869,8 @@ const processLinks = (node, force) =>
 			})
 			.finally(() =>
 			{
-				if (!--dsLoading.loading)
-					delete dsLoading.loading;
+				if (!--datasets.loading)
+					delete datasets.loading;
 
 			})
 			.catch(console.error);
@@ -1075,7 +1082,7 @@ const initMenu = elNav =>
 	elNav.append(elMenu);
 
 	elUl.append(createMenuItem("freeOnly", "Free Only", "Only show free items"));
-	const elMenuItem = createMenuItem("resolveLinks", "Resolve links", "Use resolved links");
+	const elMenuItem = createMenuItem("resolveLinks", "Resolve links", "Use resolved links\n* link and page url will be sent to 3nd party service");
 	if (loading)
 	{
 		elMenu.dataset.loading = loading;
@@ -1100,7 +1107,21 @@ const main = () =>
 
 	document.body.classList.toggle("darkMode", isDarkMode);
 	const style = document.createElement("style");
-	style.innerHTML = css;
+	const findReg = /^v([A-F]|-\d)/;
+	const find = findReg.test.bind(findReg);
+	style.innerHTML = css.replace(/^(.*)\[data-v-###]/gm, (txt, p1) =>
+	{
+		const element = document.body.querySelector(p1);
+		if (element)
+		{
+			const keys = Object.keys(element.dataset);
+			const id = keys.find(find);
+			console.log([txt, p1, id, keys]);
+			if (id)
+				return p1 + "[data-" + id.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() + "]";
+		}
+		return p1;
+	});
 	document.head.append(style);
 
 	//for some reason observer failed to process everything while page is still loading, so we do it manually
@@ -1336,9 +1357,14 @@ body.freeOnly .frontpageGrid li:not(.free)
 	}
 }
 
-.dealCard__priceContainer
+.dealCard__priceContainer[data-v-###]
 {
-	display: unset !important;
+	/*	display: unset;*/
+	grid-template: "price originalPrice fireIcon diff";
+}
+.dealCard__priceContainer > span:last-of-type
+{
+	margin-right: 4px;
 }
 
 .dealDetailsPriceInfo[data-deal-diff]
@@ -1352,6 +1378,7 @@ body.freeOnly .frontpageGrid li:not(.free)
 	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: center;
+	gap: inherit;
 }
 
 .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/*** */
@@ -1361,15 +1388,17 @@ a[data-deal-diff]::after /* deal list page */
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
 	height: 1em;
+	/*	padding-left: 8px; */
+	grid-area: diff;
 }
 
 @media (min-width: 768px) {
-	.dealCard__content {
-		grid-template-rows:auto 67px auto 1fr 20px !important;
+	.dealCard__content[data-v-###] {
+		grid-template-rows:auto 67px auto 1fr 20px;
 	}
 }
 .pageContent--reserveAnnouncementBar { /* top banner */
 	padding-top: 0 !important;
 }
-`/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, unicorn/no-array-for-each, space-infix-ops, unicorn/prefer-code-point, unicorn/prefer-number-properties*/,
+`/* eslint-disable-next-line unicorn/no-array-reduce, arrow-spacing, unicorn/no-array-for-each, space-infix-ops, unicorn/prefer-number-properties*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
