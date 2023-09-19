@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.18.4
+// @version      1.18.5
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -197,7 +197,12 @@ const noAds = (function ()
 		const blocked = SETTINGS.noAds ? isAds(args[0]) : false;
 		if (SETTINGS.noAds)
 		{
-			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c fetch", colors[~~blocked], colors.fetch, args, isAds.result);
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c fetch",
+				colors[~~blocked],
+				colors.fetch,
+				args,
+				isAds.result
+			);
 
 			if (blocked)
 				return Promise.resolve(new Response("", {status: 403, statusText: "Blocked"}));
@@ -213,7 +218,12 @@ const noAds = (function ()
 		const blocked = SETTINGS.noAds ? isAds(args[1]) : false;
 		if (SETTINGS.noAds)
 		{
-			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c XHR", colors[~~blocked], colors.xhr, args, isAds.result);
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c XHR",
+				colors[~~blocked],
+				colors.xhr,
+				args,
+				isAds.result
+			);
 
 			if (blocked)
 				this.send = this.abort;
@@ -249,7 +259,14 @@ const noAds = (function ()
 					const blocked = isNoAds ? isAds(isSource ? value : undefined, isSource ? undefined : value) : false;
 					if (isNoAds)
 					{
-						debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name, colors[~~blocked], colors[(name === "src" ? this.tagName.toLowerCase() : "") + name], value, isAds.result, this);
+						debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name,
+							colors[~~blocked],
+							colors[(name === "src" ? this.tagName.toLowerCase() : "") + name],
+							value,
+							isAds.result,
+							this
+						);
+
 						if (blocked)
 							return;
 					}
@@ -278,7 +295,13 @@ const noAds = (function ()
 
 			const blocked = isAds(args[i].src, args[i].innerHTML);
 
-			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c DOM_" + name, colors[~~blocked], colors.dom, args[i], this, isAds.result);
+			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c DOM_" + name,
+				colors[~~blocked],
+				colors.dom,
+				args[i],
+				this,
+				isAds.result
+			);
 
 			if (blocked)
 			{
@@ -307,7 +330,17 @@ const noAds = (function ()
 	setProperty(Element.prototype, ["innerHTML", "outerHTML"]);
 	setProperty(HTMLScriptElement.prototype, "src");
 	setProperty(HTMLIFrameElement.prototype, "src");
-	setPrototype(Element.prototype, ["append", "prepend", "after", "before", "replaceWith", "replaceChild", "insertBefore", "appendChild", "prependChild", "insertAdjacentElement"]);
+	setPrototype(Element.prototype, ["append",
+		"prepend",
+		"after",
+		"before",
+		"replaceWith",
+		"replaceChild",
+		"insertBefore",
+		"appendChild",
+		"prependChild",
+		"insertAdjacentElement"
+	]);
 	const property = Object.getOwnPropertyDescriptor(Element.prototype, "setAttribute");
 	Object.defineProperty(Element.prototype, "setAttribute", Object.assign(Object.assign({}, property), {
 		value: function (name, value)
@@ -316,7 +349,13 @@ const noAds = (function ()
 			if (isNoAds && (this instanceof HTMLScriptElement || this instanceof HTMLIFrameElement) && name === "src")
 			{
 				const blocked = isNoAds ? isAds(value) : false;
-				debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c " + name, colors[~~blocked], colors[(this.tagName.toLowerCase() || "") + name], value, isAds.result, this);
+				debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c " + name,
+					colors[~~blocked],
+					colors[(this.tagName.toLowerCase() || "") + name],
+					value,
+					isAds.result,
+					this);
+
 				if (blocked)
 				{
 					this.remove();
@@ -393,8 +432,8 @@ const noAds = (function ()
 		],
 	};
 	const colors = {
-		0: "color:green",
-		1: "color:red",
+		0: "color:green", //allowed
+		1: "color:red", //blocked
 		fetch: "color:cyan",
 		xhr: "color:#88f",
 		script: "color:orange",
@@ -658,6 +697,12 @@ const processCards = (node, force) =>
 				`.dealPrice${processed}`
 		, node, true) || [];
 
+	const priceRegex = /^[\s\w]*~?\$/;
+	const priceRegexFrom = /^(?:from )?(\d+) for \$?([\d,.]+)/g;
+	const priceRegexNonNumeric = /[^\d,.]/g;
+	const priceRegexCommas = /,/g;
+	const priceRegexFree = /free/i;
+	const priceRegexPrice = /^[\s\w]*~?\$([\d,.]+)/;
 	for (let i = 0; i < nlItems.length; i++)
 	{
 		const elPrice = nlItems[i];
@@ -670,16 +715,16 @@ const processCards = (node, force) =>
 		{
 			if ((price.toLowerCase() === "free"))
 				priceNew = 0;
-			else if (/^[\s\w]*~?\$/.test(price))
+			else if (priceRegex.test(price))
 			{
 				priceNew = Number.parseFloat(price
-					.replace(/^(?:from )?(\d+) for \$?([\d,.]+)/g, priceDivide) // 2 for $10
-					.replace(/[^\d,.]/g, "") // remove non-numeric characters
-					.replace(/,/g, "")); // remove commas
+					.replace(priceRegexFrom, priceDivide) // 2 for $10
+					.replace(priceRegexNonNumeric, "") // remove non-numeric characters
+					.replace(priceRegexCommas, "")); // remove commas
 			}
 
 		}
-		const priceFree = price && price.match(/or free/i) || priceNew === 0;
+		const priceFree = price && price.match(priceRegexFree) || priceNew === 0;
 		const elPriceRetail = $$(".retailPrice", elParent);
 		const elPriceOld = $$(".oldListPrice, .dealCard__originalPrice, .bp-p-dealCard_originalPrice", elParent);
 		// make sure price element is in it's own wrapper
@@ -698,12 +743,12 @@ const processCards = (node, force) =>
 			elParent = elWrapper;
 		}
 		const priceRetail = Number.parseFloat(trim((elPriceRetail || {}).textContent)
-			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
-			.replace(/,/g, ""));
+			.replace(priceRegexPrice, "$1")
+			.replace(priceRegexCommas, ""));
 
 		const priceOld = Number.parseFloat(trim((elPriceOld || {}).textContent)
-			.replace(/^[\s\w]*\$([\d,.]+)/g, "$1")
-			.replace(/,/g, ""));
+			.replace(priceRegexPrice, "$1")
+			.replace(priceRegexCommas, ""));
 
 		const priceDifference = (priceOld || priceRetail) - priceNew;
 		const priceDealPercent = Math.round(priceDifference * 100 / (priceOld || priceRetail));
@@ -771,8 +816,8 @@ const processLinks = (node, force) =>
 			elHover.target = elLink.target;
 			elLink.append(elHover);
 		}
-		const u = elLink.href.match(/(\?|&|&amp;)u2=([^#&]*)/i);
-		let url = u ? decodeURIComponent(u[2]) : SETTINGS(id + type);
+		const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
+		let url = u2 ? decodeURIComponent(u2[1]) : SETTINGS(id + type);
 
 		const aLinks = linksData[id] || [elLink];
 		const isInited = aLinks.resolved !== undefined;
@@ -962,31 +1007,36 @@ const resolveUrl = (id, type, url) => fetch(api + id + type, {method: "POST", he
  * @param {string} url - The URL to extract the ID and type from.
  * @returns {Object|boolean} An object containing the ID and type of the deal, or false if no ID or type could be found.
  */
-const getUrlInfo = url =>
+const getUrlInfo = (() =>
 {
-	const ids = ["pno", "tid", "sdtid"];
+	const ids = ["pno", "tid", "sdtid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
 	const queryConvert = {
 		sdtid : "tid"
 	};
-	let matchIDS;
-
-	for (let i = 0; i < ids.length; i++)
+	const lnoRegex = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
+	return url =>
 	{
-		matchIDS = new RegExp("(\\?|(&|&amp;))((" + ids[i] + ")=([^&]+))", "i").exec(url);//url.match(r);
-		if (matchIDS)
-			break;
-	}
-	if (!matchIDS)
-		return false;
+		let type;
+		let id;
+		for (let i = 0; i < ids.length; i++)
+		{
+			[, type, id] = ids[i].exec(url) || [];
+			if (id !== undefined)
+				break;
+		}
+		if (type === undefined)
+			return false;
 
-	matchIDS[4] = queryConvert[matchIDS[4]] || matchIDS[4];
-	const matchLNO = url.match(/(\?|(&|&amp;))lno=(\d+)/i);
-	if (matchLNO)
-		matchIDS[5] += "-" + matchLNO[3];
-	return {id: matchIDS[5], type: matchIDS[4]};
-};
+		type = queryConvert[type] || type;
 
-let initMenuCounter = 1000;
+		const matchLNO = lnoRegex.exec(url);
+		if (matchLNO)
+			id += "-" + matchLNO[1];
+
+		return {id, type};
+	};
+})();
+
 /**
  * Initializes the Slickdeals+ menu.
  * @function
@@ -994,7 +1044,7 @@ let initMenuCounter = 1000;
  */
 const initMenu = elNav =>
 {
-	if (elNav.children.length < 4 && --initMenuCounter)
+	if (elNav.children.length < 4 && --initMenu.counter)
 		return setTimeout(() => initMenu(elNav), 0);
 
 	/**
@@ -1093,34 +1143,34 @@ const initMenu = elNav =>
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug", "Debug", "Show debug messages in the console"));
 };
+initMenu.counter = 1000;
 
 /**
  * The main function that initializes the Slickdeals+ script.
  * @function
  * @returns {void}
  */
-const main = () =>
+const init = () =>
 {
-	window.removeEventListener("DOMContentLoaded", main, false);
+	window.removeEventListener("DOMContentLoaded", init, false);
 
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
 	document.body.classList.toggle("darkMode", isDarkMode);
 	const style = document.createElement("style");
-	const findReg = /^v([A-F]|-\d)/;
-	const find = findReg.test.bind(findReg);
-	style.innerHTML = css.replace(/^(.*)\[data-v-###]/gm, (txt, p1) =>
+	const cssFindIdRegex = /^v([A-F]|-\d)/;
+	const cssFindId = cssFindIdRegex.test.bind(cssFindIdRegex);
+	style.innerHTML = css.replace(/^(.*)\[data-v-###]/gm, (txt, query) =>
 	{
-		const element = document.body.querySelector(p1);
+		const element = document.body.querySelector(query);
 		if (element)
 		{
 			const keys = Object.keys(element.dataset);
-			const id = keys.find(find);
-			console.log([txt, p1, id, keys]);
+			const id = keys.find(cssFindId);
 			if (id)
-				return p1 + "[data-" + id.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() + "]";
+				return query + "[data-" + id.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() + "]";
 		}
-		return p1;
+		return query;
 	});
 	document.head.append(style);
 
@@ -1134,7 +1184,7 @@ const main = () =>
 	debug(GM_info.script.name, "v" + GM_info.script.version, "initialized");
 };//main()
 
-window.addEventListener("DOMContentLoaded", main, false);
+window.addEventListener("DOMContentLoaded", init, false);
 })(`
 a.resolved:not(.seeDealButton):not(.button.success)
 {
