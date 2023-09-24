@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.19
+// @version      1.20
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -103,11 +103,16 @@ const SETTINGS = (() =>
 
 	data.version = GM_info.script.version;
 	//each setting is a class name
-	document.addEventListener("DOMContentLoaded", () =>
+	const init = () =>
 	{
+		const elHtml = document.documentElement;
+		if (!elHtml)
+			return document.addEventListener("DOMContentLoaded", init);
+
 		for(const i in dataDefault)
-			document.body.classList.toggle(i, !!data[i]);
-	});
+			elHtml.classList.toggle(i, !!data[i]);
+	};
+	init();
 	const cache = new Map(Object.entries(data));
 	let timer;
 	let timeout;
@@ -163,7 +168,7 @@ const SETTINGS = (() =>
 		if (id === "resolveLinks")
 			updateLinks();
 
-		document.body.classList.toggle(id, !!value);
+		document.documentElement.classList.toggle(id, !!value);
 		save();
 	},
 	{
@@ -964,32 +969,27 @@ const processLinks = (node, force) =>
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
 		resolveUrl(id, type, elLink._hrefOrig)
-			.then(resolvedUrl =>
+			.then(response =>
 			{
-				if (!resolvedUrl)
-					throw new Error("No data:" + resolvedUrl);
+				if (!response || response instanceof Response || response.byteLength === 0)
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : ""));
 
-				resolvedUrl = new Uint8Array(resolvedUrl);
+				response = new Uint8Array(response);
 				const k = new TextEncoder().encode(id + type);
-				const r = new Uint8Array(resolvedUrl.length);
-				for(let i = 0; i < resolvedUrl.length; i++)
-					r[i] = resolvedUrl[i - 1] ^ resolvedUrl[i] ^ k[i % k.length];
+				const r = new Uint8Array(response.length)
+					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
-				resolvedUrl = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
 				try
 				{
-					// const parsedUrl = new URL(resolvedUrl);
-					// if (parsedUrl.hostname !== "slickdeals.net")
-					// {
-					SETTINGS(id + type, resolvedUrl);
+					SETTINGS(id + type, response);
 					for(let i = 0; i < aLinks.length; i++)
-						linkUpdate(aLinks[i], resolvedUrl);
+						linkUpdate(aLinks[i], response);
 
 					aLinks.resolved = true;
-					// }
 				}
 				catch{}
-				return resolvedUrl;
+				return response;
 			})
 			.finally(() =>
 			{
@@ -1076,9 +1076,9 @@ const updateLinks = () =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
-const resolveUrl = (id, type, url) => fetch(api + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
-	.then(r => r.arrayBuffer())
-	.catch(console.error);
+const resolveUrl = (id, type, url) => fetch(api + SETTINGS.version + "/" + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
+	.then(r => r && r.ok && r.arrayBuffer() || r)
+	.catch(() => {});
 
 /**
  * Extracts the ID and type of a deal from a given URL.
@@ -1158,7 +1158,7 @@ const initMenu = elNav =>
 		elLi.append(elA);
 
 		const elStyle = document.createElement("style");
-		elStyle.textContent = `body.${id} #${id}::before{content:"☑";}`;
+		elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
 		document.head.append(elStyle);
 		return elLi;
 	};
@@ -1382,10 +1382,10 @@ a:hover > a.overlayUrl
 	display: none !important;
 }
 
-body.freeOnly .frontpageRecommendationCarousel li:not(.free),
-body.freeOnly .dealTiles li:not(.free),
-body.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
-body.freeOnly .frontpageGrid li:not(.free)
+html.freeOnly .frontpageRecommendationCarousel li:not(.free),
+html.freeOnly .dealTiles li:not(.free),
+html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly .frontpageGrid li:not(.free)
 {
 	display: none;
 }
