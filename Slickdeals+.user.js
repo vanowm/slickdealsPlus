@@ -152,6 +152,11 @@ const SETTINGS = (() =>
 	};
 	settingsInit();
 
+	/**
+	 * Resets the user's settings to their default values.
+	 * @function
+	 * @returns {void}
+	 */
 	const settingsGetData = key => new Proxy(defaultSettings, {
 		get: (target, name) => Reflect.get(target[name], key),
 		set: () => true, //read-only
@@ -224,6 +229,13 @@ const SETTINGS = (() =>
 	if (updated)
 		settingsSave();
 
+	/**
+	 * Gets or sets a user setting and updates the HTML element accordingly.
+	 * @function
+	 * @param {string} id - The ID of the setting to get or set.
+	 * @param {*} [value] - The value to set the setting to. If omitted, the current value of the setting is returned.
+	 * @returns {*} The current value of the setting, or undefined if setting a new value.
+	 */
 	const settingsFunction = (id, value) =>
 	{
 		if (value === undefined)
@@ -935,6 +947,12 @@ const processCards = (node, force) =>
 	}
 };
 
+/**
+ * Highlights the cards with a certain number of votes.
+ * @function
+ * @param {NodeList|Element} node - The node or NodeList to search for cards.
+ * @returns {void}
+ */
 const highlightCards = node =>
 {
 	const nlItems = node instanceof NodeList
@@ -966,6 +984,7 @@ const highlightCards = node =>
 		}
 	}
 };
+
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
  * @function
@@ -1235,12 +1254,10 @@ const initMenu = elNav =>
 		return setTimeout(() => initMenu(elNav), 0);
 
 	/**
-	 * Creates a menu item element with a label and style.
+	 * Creates a menu item for a user setting.
 	 * @function
-	 * @param {string} id - The ID of the menu item.
-	 * @param {string} text - The text to display for the menu item.
-	 * @param {string} description - The description to display for the menu item.
-	 * @returns {HTMLElement} The menu item element.
+	 * @param {string} id - The ID of the setting to create a menu item for.
+	 * @returns {Element} The menu item element.
 	 */
 	const createMenuItem = id =>
 	{
