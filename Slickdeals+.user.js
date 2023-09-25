@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.20
+// @version      1.21
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -15,6 +15,8 @@
 
 const linksData = {};
 const processedMarker = "©"; //class name indicating that the element has already been processed
+// we can use GM_info.script.version but if we use external editor, it shows incorrect version
+const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -33,38 +35,52 @@ const SETTINGS = (() =>
 		localStorage.setItem(LocalStorageName, oldData);
 		localStorage.removeItem("linksCache");
 	}
-	const dataDefault = {
-		freeOnly: 0, /* show free only */
-		resolveLinks: 1, /* use resolved links by default*/
-		noAds: 1, /* remove ads */
-		debug: 2, /* debug mode: 0 = off, 1 = on, 2 = off and hide menu */
-		version: "" /* placeholder */
+	const defaultSettings = {
+		freeOnly: { /* show free only */
+			default: 0,
+			name: "Free Only",
+			description: "Only show free items",
+		},
+		resolveLinks: { /* use resolved links by default*/
+			default: 1,
+			name: "Resolve links",
+			description: "Use resolved links\n* link and page url will be sent to 3nd party service",
+			onChange: () => updateLinks()
+		},
+		noAds: { /* remove ads */
+			default: 1,
+			name: "No ads",
+			description: "Block ads (require page reload)",
+		},
+		debug: { /* debug mode: 0 = off, 1 = on, 2 = off and hide menu */
+			default: 2,
+			name: "Debug",
+			description: "Show debug messages in the console",
+		},
+		thumbsUp: { /* highlight deals with this minimum score */
+			default: 0,
+			type: "number",
+			name: "Highlight w/ score",
+			description: "Highlight items with minimum of this score",
+			min: 0,
+			onChange: () => highlightCards(),
+		},
+		version: { /* placeholder */
+			default: ""
+		}
 	};
-	let data = Object.assign({}, dataDefault);
+
+	const settings = new Map();
+	for(const i in defaultSettings)
+		settings.set(i, defaultSettings[i].default);
+
 	try
 	{
-		Object.assign(data, JSON.parse(localStorage.getItem(LocalStorageName)));
+		const data = JSON.parse(localStorage.getItem(LocalStorageName));
+		for(const i in data)
+			settings.set(i, data[i]);
 	}
 	catch{}
-	if (Object.prototype.toString.call(data) !== "[object Object]")
-		data = Object.assign({}, dataDefault);
-
-	/* clean up old settings */
-	const reg = /^\d/;
-	for(const i in data)
-	{
-		if (reg.test(i))
-			continue;
-
-		/* upgrade from v1.14 */
-		if (i === "resolvedClick")
-			data.resolveLinks = data[i];
-
-		if (!Object.prototype.hasOwnProperty.call(dataDefault, i))
-			delete data[i];
-
-	}
-
 	/**
 	 * Compares two version strings and returns -1, 0, or 1
 	 * depending on whether the first version is less than, equal to, or greater than the second version.
@@ -89,92 +105,149 @@ const SETTINGS = (() =>
 		.replace(/(?:\.0+)*(\.-\d+(?:\.\d+)?)\.*$/g, "$1")
 		.split("."));
 
-	const updated = data.version !== GM_info.script.version;
+	const previousVersion = settings.get("version");
+	const updated = previousVersion !== VERSION;
 	// eslint-disable-next-line sonarjs/no-collapsible-if
-	if (updated && data.version)
+	if (updated && previousVersion)
 	{
 		//show debug option only if it was manually enabled in previous version
 		// eslint-disable-next-line unicorn/no-lonely-if
-		if (compareVersion(data.version, "1.18.3") < 0)
+		if (compareVersion(previousVersion, "1.18.3") < 0)
 		{
-			data.debug = data.debug ? 1 : 2;
+			settings.debug = settings.debug ? 1 : 2;
+		}
+		if (compareVersion(previousVersion, "1.15") < 0 && settings.has("resolvedClick"))
+		{
+			settings.set("resolveLinks", settings.get("resolvedClick"));
 		}
 	}
+	/* clean up old/invalid settings */
+	const isLink = /^\d/;
+	for(const [id] of settings)
+	{
+		if (isLink.test(id))
+			continue;
 
-	data.version = GM_info.script.version;
-	//each setting is a class name
-	const init = () =>
+		if (!Object.prototype.hasOwnProperty.call(defaultSettings, id))
+			settings.delete(id);
+
+		if (typeof settings.get(id) !== typeof defaultSettings[id].default)
+			settings.set(id, defaultSettings[id].default);
+	}
+
+	settings.set("version", VERSION);
+	/**
+	 * Initializes the user's settings by adding the appropriate class names to the HTML element.
+	 * @function
+	 * @returns {void}
+	 */
+	const settingsInit = () =>
 	{
 		const elHtml = document.documentElement;
 		if (!elHtml)
-			return document.addEventListener("DOMContentLoaded", init);
+			return document.addEventListener("DOMContentLoaded", settingsInit);
 
-		for(const i in dataDefault)
-			elHtml.classList.toggle(i, !!data[i]);
+		for(const i in defaultSettings)
+			elHtml.classList.toggle(i, !!settings.get(i));
 	};
-	init();
-	const cache = new Map(Object.entries(data));
+	settingsInit();
+
+	const settingsGetData = key => new Proxy(defaultSettings, {
+		get: (target, name) => Reflect.get(target[name], key),
+		set: () => true, //read-only
+	});
+	const settingsReset = () =>
+	{
+		for(const i in defaultSettings)
+		{
+			if (i !== "version")
+				settings.set(i, defaultSettings[i].default);
+		}
+
+		settingsSave();
+	};
+	const defaultKeys = Object.keys(defaultSettings);
+	const settingsCommands = {
+		$default: settingsGetData("default"),
+		$type: settingsGetData("type"),
+		$name: settingsGetData("name"),
+		$description: settingsGetData("description"),
+		$min: settingsGetData("min"),
+		$max: settingsGetData("max"),
+		$onChange: settingsGetData("onChange"),
+		$keys: defaultKeys,
+		$reset: () => settingsReset()
+	};
 	let timer;
 	let timeout;
+
 	/**
 	 * Saves the data in the cache to the browser's local storage.
 	 * @function
 	 * @param {number} [attempt=0] - The number of times the function has attempted to save the data.
 	 */
-	const save = (attempt = 0) =>
+	const settingsSave = (attempt = 0) =>
 	{
 		clearTimeout(timeout);
 		const now = Date.now();
 		if (timer + 300 > now)
 		{
-			timeout = setTimeout(() => save(attempt), 300);
+			timeout = setTimeout(() => settingsSave(attempt), 300);
 			return;
 		}
 		try
 		{
 			// try save settings, if it fails, remove previous items until it succeeds
-			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(cache)));
+			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(settings)));
 		}
 		catch
 		{
 			//removing in batches exponentially
-			for(let i = 0, key, keys = cache.keys(), count = ++attempt ** 2; i < count; i++)
+			for(let i = 0, key, keys = settings.keys(), count = ++attempt ** 2; i < count; i++)
 			{
 				do
 				{
 					key = keys.next().value;
 				}
-				while(key && !/^\d/.test(key)); //don't remove non-numeric keys
+				while(key && !isLink.test(key)); //don't remove settings
 
-				cache.delete(key);
+				settings.delete(key);
 			}
 
 			if (attempt < 10_000)
-				return save(attempt);
+				return settingsSave(attempt);
 
 		}
 		timer = now;
 	};
 
 	if (updated)
-		save();
+		settingsSave();
 
-	return new Proxy((id, value) =>
+	const settingsFunction = (id, value) =>
 	{
 		if (value === undefined)
-			return cache.get(id);
+			return settings.get(id);
 
-		cache.set(id, value);
-		if (id === "resolveLinks")
-			updateLinks();
+		settings.set(id, value);
+		if (defaultSettings[id] && defaultSettings[id].onChange instanceof Function)
+			defaultSettings[id].onChange(value);
 
 		document.documentElement.classList.toggle(id, !!value);
-		save();
-	},
-	{
-		get: (target, id) => target(id),
-		set: (target, id, value) => target(id, value)
-	});
+		settingsSave();
+	};
+	return new Proxy((id, value) => settingsFunction(id, value),
+		{
+			get: (target, id) =>
+			{
+				if (Object.prototype.hasOwnProperty.call(settingsCommands, id))
+					return settingsCommands[id];
+
+				return target(id);
+
+			},
+			set: (target, id, value) => target(id, value)
+		});
 })();
 
 /**
@@ -762,7 +835,7 @@ const processCards = (node, force) =>
 		? node
 		: $$(	`.salePrice${processed},` +
 				`.itemPrice${processed},` +
-				`.price${processed},` +
+				`.price${processed},` + //search
 				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
 				`.dealCard__price${processed},` +
 				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
@@ -778,7 +851,7 @@ const processCards = (node, force) =>
 	const priceRegexTrim = /[\s\w]*~?\$([\d,.]+)(?:\s.*)?/;
 	const priceRegexFree = /free/;
 	const priceRegexPrice = /^[\s\w]*~?\$([\d,.]+)/;
-	const priceRegexOff = /(?:\$?([\d,.]+))?\soff\s(?:\$?([\d,.]+))?$/;
+	const priceRegexOff = /(?:\$?([\d,.]+))?\soff(?:\s\$?([\d,.]+))?$/;
 	for (let i = 0; i < nlItems.length; i++)
 	{
 		const elPrice = nlItems[i];
@@ -840,7 +913,10 @@ const processCards = (node, force) =>
 			"div[data-role='frontpageDealContent']"
 		);
 		if (elCard)
+		{
 			elCard.classList.toggle("free", priceFree);
+			highlightCards(elCard);
+		}
 
 		if (!Number.isNaN(priceDealPercent))
 		{
@@ -855,9 +931,41 @@ const processCards = (node, force) =>
 			elParent.title = "Save $" + diff + " (" + priceDealPercent + "%)";
 		}
 		elPrice.classList.add(processedMarker);
+
 	}
 };
 
+const highlightCards = node =>
+{
+	const nlItems = node instanceof NodeList
+		? node
+		: (node instanceof Element
+			? [node]
+			: $$(	"li.frontpageGrid__feedItem," + //front page
+					"li.carousel__slide," + // front page carousel
+					"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
+					"div.resultRow" //search result
+			, node, true));
+
+	if (nlItems.length === 0)
+		return;
+
+	for(let i = 0; i < nlItems.length; i++)
+	{
+		const elCard = nlItems[i];
+		const elVotes = elCard.querySelector(
+			".dealCardSocialControls__voteCount," + //front page
+			".bp-p-votingThumbsPopup_voteCount," + // https://slickdeals.net/deals/watches/
+			".ratingCol.stats>.num," + //search result
+			".ratingCol>.ratingNum" //search result
+		);
+		if (elVotes && elVotes.textContent !== "")
+		{
+			const votes = Number.parseInt(elVotes.textContent);
+			elCard.classList.toggle("thumbs", SETTINGS.thumbsUp && votes > 0 && votes >= SETTINGS.thumbsUp);
+		}
+	}
+};
 /**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
  * @function
@@ -1076,7 +1184,7 @@ const updateLinks = () =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
-const resolveUrl = (id, type, url) => fetch(api + SETTINGS.version + "/" + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
+const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(() => {});
 
@@ -1134,31 +1242,65 @@ const initMenu = elNav =>
 	 * @param {string} description - The description to display for the menu item.
 	 * @returns {HTMLElement} The menu item element.
 	 */
-	const createMenuItem = (id, text, description) =>
+	const createMenuItem = id =>
 	{
-		const elA = document.createElement("a");
-		elA.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
-		elA.addEventListener("keypress", evt =>
-		{
-			if (evt.key === " " || evt.key === "Enter")
-			{
-				evt.preventDefault();
-				evt.stopPropagation();
-				SETTINGS(id, ~~!SETTINGS(id));
-			}
-		});
-		elA.id = id;
-		elA.textContent = text;
-		elA.title = description;
-		elA.setAttribute("tabindex", 0);
-		elA.classList.add("slickdealsHeaderDropdownItem__link");
-		elA.dataset[dataset] = "";
-		const elLi = elLiDefault.cloneNode(true);
-		elLi.classList.add(id);
-		elLi.append(elA);
-
+		const type = SETTINGS.$type[id];
+		const text = SETTINGS.$name[id];
+		const description = SETTINGS.$description[id];
 		const elStyle = document.createElement("style");
-		elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
+		const elSetting = document.createElement(type === "number" ? "input" : "a");
+		const elLi = elLiDefault.cloneNode(true);
+		let elLabelBefore;
+		let elLabelAfter;
+		if (type === "number")
+		{
+			//only allow positive round numbers
+			elSetting.addEventListener("keypress", evt =>
+			{
+				if (evt.charCode < 48 || evt.charCode > 57)
+				{
+					evt.preventDefault();
+					evt.stopPropagation();
+				}
+			});
+			elSetting.addEventListener("input", () => SETTINGS(id, ~~elSetting.value));
+			elSetting.type = "number";
+			elSetting.min = 0;
+			elSetting.step = 1;
+			elLabelBefore = document.createElement("span");
+			elLabelBefore.textContent = text;
+			elLi.classList.add("input");
+		}
+		else //checkboxes
+		{
+			elSetting.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
+			elSetting.addEventListener("keypress", evt =>
+			{
+				if (evt.key === " " || evt.key === "Enter")
+				{
+					evt.preventDefault();
+					evt.stopPropagation();
+					SETTINGS(id, ~~!SETTINGS(id));
+				}
+			});
+			elSetting.textContent = text;
+			elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
+			elSetting.classList.add("slickdealsHeaderDropdownItem__link");
+		}
+		elSetting.value = SETTINGS(id);
+		elSetting.id = id;
+		elSetting.setAttribute("tabindex", 0);
+		elSetting.dataset[dataset] = "";
+		elLi.classList.add(id);
+		elLi.title = description;
+		if (elLabelBefore)
+			elLi.append(elLabelBefore);
+
+		elLi.append(elSetting);
+
+		if (elLabelAfter)
+			elLi.append(elLabelAfter);
+
 		document.head.append(elStyle);
 		return elLi;
 	};
@@ -1175,7 +1317,7 @@ const initMenu = elNav =>
 	}
 	initMenu.elOverlay.className = "slickdealsHeader__overlay";
 
-	elMenu.classList.add("spd-menu");
+	elMenu.classList.add("sdp-menu");
 	elMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
 	elMenu.querySelector("p").textContent = "Slickdeals+";
 	const elUl = elMenu.querySelector("ul");
@@ -1186,7 +1328,7 @@ const initMenu = elNav =>
 	elMenu.addEventListener("mousedown", evt =>
 	{
 		const isMenu = evt.target === elButton || evt.target.parentElement === elButton;
-		const isMenuOpen = (document.activeElement.closest(".spd-menu > div[role='button']") || {}) === elButton;
+		const isMenuOpen = (document.activeElement.closest(".sdp-menu > div[role='button']") || {}) === elButton;
 
 		if (isMenu && isMenuOpen)
 		{
@@ -1210,17 +1352,18 @@ const initMenu = elNav =>
 	elLiDefault.innerHTML = "";
 	elNav.append(elMenu);
 
-	elUl.append(createMenuItem("freeOnly", "Free Only", "Only show free items"));
-	const elMenuItem = createMenuItem("resolveLinks", "Resolve links", "Use resolved links\n* link and page url will be sent to 3nd party service");
+	elUl.append(createMenuItem("freeOnly"));
+	const elMenuItem = createMenuItem("resolveLinks");
 	if (loading)
 	{
 		elMenu.dataset.loading = loading;
 		elMenuItem.dataset.loading = loading;
 	}
 	elUl.append(elMenuItem);
-	elUl.append(createMenuItem("noAds", "No ads", "Block ads (require page reload)"));
+	elUl.append(createMenuItem("thumbsUp"));
+	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
-		elUl.append(createMenuItem("debug", "Debug", "Show debug messages in the console"));
+		elUl.append(createMenuItem("debug"));
 };
 initMenu.counter = 1000;
 
@@ -1259,8 +1402,8 @@ const init = () =>
 		processCards(elPageContent);
 		processLinks(elPageContent);
 	}
-	debug(GM_info.script.name, "v" + GM_info.script.version, "initialized");
-};//main()
+	debug(GM_info.script.name, "v" + VERSION, "initialized");
+};//init()
 
 document.addEventListener("DOMContentLoaded", init, false);
 })(`
@@ -1286,22 +1429,64 @@ body.bp-s-darkMode .dealDetailsOutclickButton[data-v-###].resolved,
 	--buttonBackgroundColor: #06551a;
 }
 
+li.free .dealCard[data-v-###],
 div.free,
 li.free
 {
-	background-color: #ffdde0 !important;
-	animation: pulse .5s infinite alternate;
+	--highlightColor: #FF5D6A;
+	--backgroundColor: #ffdde0;
 }
 
-@keyframes pulse
-{
-	from { box-shadow: 0 0 1em red;}
-	to {box-shadow: 0 0 0.5em red;}
-}
+body.darkMode li.free .dealCard[data-v-###],
 body.darkMode div.free,
 body.darkMode li.free
 {
-	background-color: #861614 !important;
+	--highlightColor: #A11E1C;
+	--backgroundColor: #443534;
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+
+li.thumbs .dealCard[data-v-###],
+div.thumbs,
+li.thumbs
+{
+	--backgroundColor: #E4FFDD;
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+body.darkMode li.thumbs .dealCard[data-v-###],
+body.darkMode div.thumbs,
+body.darkMode li.thumbs
+{
+	--backgroundColor: #222C21;
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+/* search results */
+.resultRow.free,
+.resultRow.thumbs
+{
+	background-color: var(--backgroundColor);
+}
+
+.resultRow.free
+{
+	position: relative; /* allow box-shadow overlap item below */
+}
+/* end search results */
+
+div.free,
+li.free,
+div.thumbs,
+li.thumbs
+{
+	animation: pulse .5s infinite alternate;
+}
+@keyframes pulse
+{
+	from { box-shadow: 0 0 1em var(--highlightColor);}
+	to {box-shadow: 0 0 0.5em var(--highlightColor);}
 }
 
 #fpMainContent .gridCategory .fpGridBox.list.free,
@@ -1377,6 +1562,7 @@ a:hover > a.overlayUrl
 	display: inline;
 }
 
+.bp-p-adBlock,
 .hidden
 {
 	display: none !important;
@@ -1390,14 +1576,14 @@ html.freeOnly .frontpageGrid li:not(.free)
 	display: none;
 }
 
-/* checkboxes */
+/* setting checkbox */
 
-.spd-menu .slickdealsHeaderDropdownItem
+.sdp-menu .slickdealsHeaderDropdownItem
 {
 	cursor: pointer;
 }
 
-.spd-menu .slickdealsHeaderDropdownItem > a::before
+.sdp-menu .slickdealsHeaderDropdownItem > a::before
 {
 	content: "☐";
 	display: inline-block;
@@ -1408,12 +1594,41 @@ html.freeOnly .frontpageGrid li:not(.free)
 	margin: 0 0.1em;
 }
 
-/* end checkboxes */
+/* end setting checkbox */
 
-:root[data-loading] .spd-menu::before,
-:root[data-loading] .spd-menu::after,
-:root[data-loading] .spd-menu .slickdealsHeader__navItemText::before,
-:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+/* setting input */
+
+
+.sdp-menu .slickdealsHeaderDropdownItem.input
+{
+	cursor: default;
+}
+
+.sdp-menu li > input
+{
+	border: 1px solid;
+	border-radius: 3px;
+	padding: revert;
+	margin: revert;
+	width: 5em;
+	height: 2em;
+	line-height: 2em;
+	display: inline-block;
+	color: inherit;
+	background-color: inherit;
+}
+
+.sdp-menu li > span
+{
+	margin: 0 0.7em;
+}
+
+/* end setting input */
+
+:root[data-loading] .sdp-menu::before,
+:root[data-loading] .sdp-menu::after,
+:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::before,
+:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 {
 	position: absolute;
 	z-index: 1;
@@ -1422,18 +1637,18 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 @media (min-width: 1024px)
 {
-	:root[data-loading] .spd-menu
+	:root[data-loading] .sdp-menu
 	{
 		position: relative;
 	}
-	:root[data-loading] .spd-menu::before
+	:root[data-loading] .sdp-menu::before
 	{
 		content: "⌛";
 		right: 0.1em;
 		line-height: 2.5em;
 		animation: spin 1s linear infinite;
 	}
-	:root[data-loading] .spd-menu::after
+	:root[data-loading] .sdp-menu::after
 	{
 		content: attr(data-loading);
 		text-align: center;
@@ -1453,19 +1668,19 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 @media (max-width: 1023px)
 {
-	:root[data-loading] .spd-menu .slickdealsHeader__navItemText
+	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText
 	{
 		position: relative;
 		overflow: unset !important;
 	}
-	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::before
+	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::before
 	{
 		content: "⌛";
 		right: -1.5em;
 		line-height: 2.0em;
 		animation: spin 1s linear infinite;
 	}
-	:root[data-loading] .spd-menu .slickdealsHeader__navItemText::after
+	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 	{
 		content: attr(data-loading);
 		text-align: center;
@@ -1515,7 +1730,8 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
 .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
-.cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/*** */
+.cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
+.priceCol > .prices[data-deal-diff]::after, /* search result */
 a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
