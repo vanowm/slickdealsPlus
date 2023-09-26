@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.21
+// @version      1.21.1
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -93,11 +93,16 @@ const SETTINGS = (() =>
 	 *                    0 if they are equal, or
 	 *                    1 if the first version is greater than the second.
 	 */
-	const compareVersion = (prep =>
-		(a, b, _a = prep(a), _b = prep(b), length = Math.max(_a.length, _b.length), result = 0, i = 0) =>
+	const compareVersion = ((prep, length, i, result) =>
+		(a, b) =>
 		{
+			a = prep(a);
+			b = prep(b);
+			length = Math.max(a.length, b.length);
+			i = 0;
+			result = i;
 			while (!result && i < length)
-				result = ~~_a[i] - ~~_b[i++];
+				result = ~~a[i] - ~~b[i++];
 
 			return result < 0 ? -1 : (result ? 1 : 0);
 		})(t => ("" + t)
@@ -1723,8 +1728,7 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 .dealCard__priceContainer[data-v-###]
 {
-	/*	display: unset;*/
-	grid-template: "price originalPrice fireIcon diff";
+	display: unset;
 }
 .dealCard__priceContainer > span:last-of-type
 {
@@ -1753,9 +1757,9 @@ a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
-	height: 1em;
-	/*	padding-left: 8px; */
-	grid-area: diff;
+	display: inline-block;
+	float: right;
+
 }
 
 @media (min-width: 768px) {

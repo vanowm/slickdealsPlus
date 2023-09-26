@@ -9,6 +9,7 @@ This userscript allows block most, if not all, __ads__ and __trackers__, thus ma
 Features:
 * Ad-blocking
 * Display price and percent difference between original and sale prices
+* Highlight items based on the score
 * Highlight free items
 * Show only free items
 * Resolve links (it sends a URL to a 3rd party service which returns final destination of that URL)
