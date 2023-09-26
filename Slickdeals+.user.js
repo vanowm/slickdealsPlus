@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.21.1
+// @version      1.21.2
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -111,7 +111,7 @@ const SETTINGS = (() =>
 		.split("."));
 
 	const previousVersion = settings.get("version");
-	const updated = previousVersion !== VERSION;
+	const updated = !GM_info.isIncognito && previousVersion !== VERSION;
 	// eslint-disable-next-line sonarjs/no-collapsible-if
 	if (updated && previousVersion)
 	{
@@ -153,7 +153,29 @@ const SETTINGS = (() =>
 			return document.addEventListener("DOMContentLoaded", settingsInit);
 
 		for(const i in defaultSettings)
-			elHtml.classList.toggle(i, !!settings.get(i));
+			elHtml.classList.toggle(i, i !== "version" && !!settings.get(i));
+
+		elHtml.classList.toggle("updated", updated);
+		if (!updated || !previousVersion)
+			return;
+
+		// notification popup
+		const elPopup = document.createElement("div");
+		elPopup.textContent = GM_info.script.name + " updated from v" + previousVersion + " to v" + VERSION;
+		elPopup.className = "spd-updated";
+		const onClick = () =>
+		{
+			window.removeEventListener("click", onClick, true);
+			elPopup.remove();
+		};
+		window.addEventListener("click", onClick, true);
+		if (!document.body)
+			return document.addEventListener("DOMContentLoaded", () =>
+			{
+				document.body.append(elPopup);
+			});
+
+		document.body.append(elPopup);
 	};
 	settingsInit();
 
@@ -1386,6 +1408,11 @@ const initMenu = elNav =>
 	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
+	const elFooter = document.createElement("div");
+	elFooter.className = "slickdealsHeaderDropdownItem footer";
+	elFooter.textContent = "v" + VERSION;
+	elFooter.dataset[dataset] = "";
+	elUl.append(elFooter);
 };
 initMenu.counter = 1000;
 
@@ -1603,8 +1630,13 @@ html.freeOnly .frontpageGrid li:not(.free)
 .sdp-menu .slickdealsHeaderDropdownItem
 {
 	cursor: pointer;
+	color: var(--hamburgerTextColor);
 }
 
+.sdp-menu .slickdealsHeaderDropdownItem__link[data-v-###]
+{
+	column-gap: 4px;
+}
 .sdp-menu .slickdealsHeaderDropdownItem > a::before
 {
 	content: "☐";
@@ -1621,9 +1653,18 @@ html.freeOnly .frontpageGrid li:not(.free)
 /* setting input */
 
 
-.sdp-menu .slickdealsHeaderDropdownItem.input
+.sdp-menu ul[data-v-###],
+.sdp-menu .slickdealsHeaderDropdownItem.input,
+.sdp-menu .footer
 {
 	cursor: default;
+	row-gap: 0;
+}
+
+.sdp-menu .footer
+{
+	text-align: right;
+	opacity: 0.5;
 }
 
 .sdp-menu li > input
@@ -1657,6 +1698,37 @@ html.freeOnly .frontpageGrid li:not(.free)
 	pointer-events: none;
 }
 
+/* update popup */
+:root.updated .spd-updated
+{
+	background-color: darkred;
+	width: 100%;
+	height: 1.5rem;
+	top: 0;
+	left: 0;
+	z-index: 9999;
+	position: fixed;
+	text-align: center;
+	line-height: 1.5rem;
+	font-size: 1rem;
+	color: white;
+	animation: shrink 60s ease 600s forwards;
+}
+
+@keyframes shrink {
+	90% {
+		font-size: 0.5rem;
+		opacity: 1;
+	}
+	100%
+	{
+		font-size: 0;
+		opacity: 0;
+		display: none;
+	}
+}
+/* end update popup */
+
 @media (min-width: 1024px)
 {
 	:root[data-loading] .sdp-menu
@@ -1686,6 +1758,11 @@ html.freeOnly .frontpageGrid li:not(.free)
 			0 0 0 #fff;
 	
 	}
+	.sdp-menu .slickdealsHeaderDropdownItem
+	{
+		color: var(--dropdownTextColor);
+	}
+	
 }
 
 @media (max-width: 1023px)
