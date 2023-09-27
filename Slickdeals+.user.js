@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.21.2
+// @version      1.21.3
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -1430,7 +1430,7 @@ const init = () =>
 	document.body.classList.toggle("darkMode", isDarkMode);
 	const cssFindIdRegex = /^v([A-F]|-\d)/;
 	const cssFindId = cssFindIdRegex.test.bind(cssFindIdRegex);
-	style.innerHTML = css.replace(/^(.*)\[data-v-###]/gm, (txt, query) =>
+	style.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
 	{
 		const element = document.body.querySelector(query);
 		if (element)
@@ -1455,13 +1455,14 @@ const init = () =>
 };//init()
 
 document.addEventListener("DOMContentLoaded", init, false);
+// eslint-disable-next-line quotes
 })(`
 a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
 {
 	color: #00b309;
 }
-body.bp-s-darkMode .dealDetailsOutclickButton[data-v-###].resolved,
-.dealDetailsOutclickButton[data-v-###].resolved,
+body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
+.dealDetailsOutclickButton[data-v-ID].resolved,
 .seeDealButton.resolved
 {
 	--buttonBackgroundColor: #0c9144;
@@ -1478,7 +1479,7 @@ body.bp-s-darkMode .dealDetailsOutclickButton[data-v-###].resolved,
 	--buttonBackgroundColor: #06551a;
 }
 
-li.free .dealCard[data-v-###],
+li.free .dealCard[data-v-ID],
 div.free,
 li.free
 {
@@ -1486,7 +1487,7 @@ li.free
 	--backgroundColor: #ffdde0;
 }
 
-body.darkMode li.free .dealCard[data-v-###],
+body.darkMode li.free .dealCard[data-v-ID],
 body.darkMode div.free,
 body.darkMode li.free
 {
@@ -1496,7 +1497,7 @@ body.darkMode li.free
 }
 
 
-li.thumbs .dealCard[data-v-###],
+li.thumbs .dealCard[data-v-ID],
 div.thumbs,
 li.thumbs
 {
@@ -1504,7 +1505,7 @@ li.thumbs
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-body.darkMode li.thumbs .dealCard[data-v-###],
+body.darkMode li.thumbs .dealCard[data-v-ID],
 body.darkMode div.thumbs,
 body.darkMode li.thumbs
 {
@@ -1633,7 +1634,7 @@ html.freeOnly .frontpageGrid li:not(.free)
 	color: var(--hamburgerTextColor);
 }
 
-.sdp-menu .slickdealsHeaderDropdownItem__link[data-v-###]
+.sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID]
 {
 	column-gap: 4px;
 }
@@ -1653,7 +1654,7 @@ html.freeOnly .frontpageGrid li:not(.free)
 /* setting input */
 
 
-.sdp-menu ul[data-v-###],
+.sdp-menu ul[data-v-ID],
 .sdp-menu .slickdealsHeaderDropdownItem.input,
 .sdp-menu .footer
 {
@@ -1803,9 +1804,11 @@ html.freeOnly .frontpageGrid li:not(.free)
 	}
 }
 
-.dealCard__priceContainer[data-v-###]
+.dealCard__priceContainer[data-v-ID]
 {
-	display: unset;
+	display: flex;
+	overflow: hidden;
+	flex-wrap: wrap;
 }
 .dealCard__priceContainer > span:last-of-type
 {
@@ -1834,13 +1837,10 @@ a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
-	display: inline-block;
-	float: right;
-
 }
 
 @media (min-width: 768px) {
-	.dealCard__content[data-v-###] {
+	.dealCard__content[data-v-ID] {
 		grid-template-rows:auto 67px auto 1fr 20px;
 	}
 }
