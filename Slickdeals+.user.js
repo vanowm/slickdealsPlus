@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      1.21.3
+// @version      23.9.28011831
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -60,9 +60,23 @@ const SETTINGS = (() =>
 		thumbsUp: { /* highlight deals with this minimum score */
 			default: 0,
 			type: "number",
-			name: "Highlight w/ score",
+			name: "Highlight score ≥",
 			description: "Highlight items with minimum of this score",
 			min: 0,
+			onChange: () => highlightCards(),
+		},
+		dealDiff: {
+			default: 1,
+			name: "Price difference",
+			description: "Display price/percent difference between current and original prices",
+		},
+		highlightDiff: { /* highlight deals with this minimum price difference percent */
+			default: 0,
+			name: "Highlight price diff ≥",
+			description: "Highlight items with minimum of this price difference percent",
+			type: "number",
+			min: 0,
+			max: 100,
 			onChange: () => highlightCards(),
 		},
 		version: { /* placeholder */
@@ -153,7 +167,14 @@ const SETTINGS = (() =>
 			return document.addEventListener("DOMContentLoaded", settingsInit);
 
 		for(const i in defaultSettings)
-			elHtml.classList.toggle(i, i !== "version" && !!settings.get(i));
+		{
+			if (i === "version")
+				continue;
+
+			const value = settings.get(i);
+			elHtml.classList.toggle(i, !!value);
+			// elHtml.dataset[i] = value;
+		}
 
 		elHtml.classList.toggle("updated", updated);
 		if (!updated || !previousVersion)
@@ -951,11 +972,6 @@ const processCards = (node, force) =>
 			"div.resultRow," +
 			"div[data-role='frontpageDealContent']"
 		);
-		if (elCard)
-		{
-			elCard.classList.toggle("free", priceFree);
-			highlightCards(elCard);
-		}
 
 		if (!Number.isNaN(priceDealPercent))
 		{
@@ -971,6 +987,11 @@ const processCards = (node, force) =>
 		}
 		elPrice.classList.add(processedMarker);
 
+		if (elCard)
+		{
+			elCard.classList.toggle("free", priceFree);
+			highlightCards(elCard);
+		}
 	}
 };
 
@@ -995,6 +1016,7 @@ const highlightCards = node =>
 	if (nlItems.length === 0)
 		return;
 
+	const highlightDiff = SETTINGS.highlightDiff;
 	for(let i = 0; i < nlItems.length; i++)
 	{
 		const elCard = nlItems[i];
@@ -1007,7 +1029,12 @@ const highlightCards = node =>
 		if (elVotes && elVotes.textContent !== "")
 		{
 			const votes = Number.parseInt(elVotes.textContent);
-			elCard.classList.toggle("thumbs", SETTINGS.thumbsUp && votes > 0 && votes >= SETTINGS.thumbsUp);
+			elCard.classList.toggle("thumbsUp", SETTINGS.thumbsUp && votes > 0 && votes >= SETTINGS.thumbsUp);
+		}
+		if (elCard.dataset.dealPercent)
+		{
+			const dealPercent = ~~elCard.dataset.dealPercent;
+			elCard.classList.toggle("highlightDiff", highlightDiff && dealPercent >= highlightDiff);
 		}
 	}
 };
@@ -1286,7 +1313,7 @@ const initMenu = elNav =>
 	 * @param {string} id - The ID of the setting to create a menu item for.
 	 * @returns {Element} The menu item element.
 	 */
-	const createMenuItem = id =>
+	const createMenuItem = (id, options = {}) =>
 	{
 		const type = SETTINGS.$type[id];
 		const text = SETTINGS.$name[id];
@@ -1309,7 +1336,14 @@ const initMenu = elNav =>
 			});
 			elSetting.addEventListener("input", () => SETTINGS(id, ~~elSetting.value));
 			elSetting.type = "number";
-			elSetting.min = 0;
+			elSetting.min = SETTINGS.$min[id] || 0;
+			if (SETTINGS.$max[id] !== undefined)
+			{
+				elSetting.max = SETTINGS.$max[id];
+				const length_ = ("" + elSetting.max).length;
+				elSetting.style.width = (length_ * 2) + "ch";
+			}
+
 			elSetting.step = 1;
 			elLabelBefore = document.createElement("span");
 			elLabelBefore.textContent = text;
@@ -1337,11 +1371,26 @@ const initMenu = elNav =>
 		elSetting.dataset[dataset] = "";
 		elLi.classList.add(id);
 		elLi.title = description;
+
+		if (options.labelBefore)
+		{
+			if (!elLabelBefore)
+				elLabelBefore = document.createElement("span");
+
+			elLabelBefore.textContent = options.labelBefore;
+		}
 		if (elLabelBefore)
 			elLi.append(elLabelBefore);
 
 		elLi.append(elSetting);
 
+		if (options.labelAfter)
+		{
+			if (!elLabelAfter)
+				elLabelAfter = document.createElement("span");
+
+			elLabelAfter.textContent = options.labelAfter;
+		}
 		if (elLabelAfter)
 			elLi.append(elLabelAfter);
 
@@ -1404,6 +1453,10 @@ const initMenu = elNav =>
 		elMenuItem.dataset.loading = loading;
 	}
 	elUl.append(elMenuItem);
+	elUl.append(createMenuItem("dealDiff"));
+	elUl.append(createMenuItem("highlightDiff", {
+		labelAfter: "%"
+	}));
 	elUl.append(createMenuItem("thumbsUp"));
 	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
@@ -1456,8 +1509,7 @@ const init = () =>
 
 document.addEventListener("DOMContentLoaded", init, false);
 // eslint-disable-next-line quotes
-})(`
-a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
+})(`a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
 {
 	color: #00b309;
 }
@@ -1497,25 +1549,40 @@ body.darkMode li.free
 }
 
 
-li.thumbs .dealCard[data-v-ID],
-div.thumbs,
-li.thumbs
+li.thumbsUp .dealCard[data-v-ID],
+div.thumbsUp,
+li.thumbsUp
 {
 	--backgroundColor: #E4FFDD;
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-body.darkMode li.thumbs .dealCard[data-v-ID],
-body.darkMode div.thumbs,
-body.darkMode li.thumbs
+body.darkMode li.thumbsUp .dealCard[data-v-ID],
+body.darkMode div.thumbsUp,
+body.darkMode li.thumbsUp
 {
 	--backgroundColor: #222C21;
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
+li.highlightDiff .dealCard[data-v-ID],
+div.highlightDiff,
+li.highlightDiff
+{
+	--backgroundColor: #ffecdd;
+	--cardBackgroundColor: var(--backgroundColor);
+}
+body.darkMode li.highlightDiff .dealCard[data-v-ID],
+body.darkMode div.highlightDiff,
+body.darkMode li.highlightDiff
+{
+	--backgroundColor: #321c38;
+	--cardBackgroundColor: var(--backgroundColor);
+}
 /* search results */
 .resultRow.free,
-.resultRow.thumbs
+.resultRow.highlightDiff,
+.resultRow.thumbsUp
 {
 	background-color: var(--backgroundColor);
 }
@@ -1528,8 +1595,10 @@ body.darkMode li.thumbs
 
 div.free,
 li.free,
-div.thumbs,
-li.thumbs
+div.thumbsUp,
+li.thumbsUp,
+div.highlightDiff,
+li.highlightDiff
 {
 	animation: pulse .5s infinite alternate;
 }
@@ -1662,12 +1731,20 @@ html.freeOnly .frontpageGrid li:not(.free)
 	row-gap: 0;
 }
 
+.sdp-menu li
+{
+	white-space: nowrap;
+}
+
 .sdp-menu .footer
 {
 	text-align: right;
 	opacity: 0.5;
 }
-
+.sdp-menu ul[data-v-ID] .slickdealsHeaderDropdownItem.input
+{
+	padding: 0.35em 0.8em;
+}
 .sdp-menu li > input
 {
 	border: 1px solid;
@@ -1682,9 +1759,13 @@ html.freeOnly .frontpageGrid li:not(.free)
 	background-color: inherit;
 }
 
-.sdp-menu li > span
+.sdp-menu li > span:first-child
 {
-	margin: 0 0.7em;
+	margin-right: 0.6em;
+}
+.sdp-menu li > span:last-child
+{
+	margin-left: 0.6em;
 }
 
 /* end setting input */
@@ -1700,7 +1781,7 @@ html.freeOnly .frontpageGrid li:not(.free)
 }
 
 /* update popup */
-:root.updated .spd-updated
+html.updated .spd-updated
 {
 	background-color: darkred;
 	width: 100%;
@@ -1809,6 +1890,7 @@ html.freeOnly .frontpageGrid li:not(.free)
 	display: flex;
 	overflow: hidden;
 	flex-wrap: wrap;
+	height: min-content;
 }
 .dealCard__priceContainer > span:last-of-type
 {
@@ -1829,14 +1911,15 @@ html.freeOnly .frontpageGrid li:not(.free)
 	gap: inherit;
 }
 
-.dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
-.dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
-.cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
-.priceCol > .prices[data-deal-diff]::after, /* search result */
-a[data-deal-diff]::after /* deal list page */
+html.dealDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
+html.dealDiff .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
+html.dealDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
+html.dealDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
+html.dealDiff a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
+	width: 100%; /* force on new line */
 }
 
 @media (min-width: 768px) {
@@ -1846,6 +1929,5 @@ a[data-deal-diff]::after /* deal list page */
 }
 .pageContent--reserveAnnouncementBar { /* top banner */
 	padding-top: 0 !important;
-}
-`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties*/,
+}`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties, indent*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));

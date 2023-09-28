@@ -1,4 +1,0 @@
-Slickdeals
-userscript
-userscript
-slickdeals
