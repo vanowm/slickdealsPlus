@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.9.28011831
+// @version      23.9.28-93039
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -126,11 +126,9 @@ const SETTINGS = (() =>
 
 	const previousVersion = settings.get("version");
 	const updated = !GM_info.isIncognito && previousVersion !== VERSION;
-	// eslint-disable-next-line sonarjs/no-collapsible-if
 	if (updated && previousVersion)
 	{
 		//show debug option only if it was manually enabled in previous version
-		// eslint-disable-next-line unicorn/no-lonely-if
 		if (compareVersion(previousVersion, "1.18.3") < 0)
 		{
 			settings.debug = settings.debug ? 1 : 2;
@@ -447,14 +445,6 @@ const noAds = (() =>
 						return;
 					}
 					property.set.call(this, value);
-					// // console.log(this, name, this.href);
-					// if (name !== "href" || !(this instanceof HTMLAnchorElement))
-					// 	return;
-
-					// if (this._hrefResolved && this.href !== this._hrefResolved && this.href !== this._hrefOrig)
-					// 	linkUpdate(this, this.href, true);
-					// else if (SETTINGS.resolveLinks && !this.classList.contains("overlayUrl"))
-					// 	processLinks([this], true);
 				},
 				enumerable: property.enumerable || true,
 				configurable: property.configurable || true
@@ -1770,10 +1760,10 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 /* end setting input */
 
-:root[data-loading] .sdp-menu::before,
-:root[data-loading] .sdp-menu::after,
-:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::before,
-:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
+html[data-loading] .sdp-menu::before,
+html[data-loading] .sdp-menu::after,
+html[data-loading] .sdp-menu .slickdealsHeader__navItemText::before,
+html[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 {
 	position: absolute;
 	z-index: 1;
@@ -1813,18 +1803,18 @@ html.updated .spd-updated
 
 @media (min-width: 1024px)
 {
-	:root[data-loading] .sdp-menu
+	html[data-loading] .sdp-menu
 	{
 		position: relative;
 	}
-	:root[data-loading] .sdp-menu::before
+	html[data-loading] .sdp-menu::before
 	{
 		content: "⌛";
 		right: 0.1em;
 		line-height: 2.5em;
 		animation: spin 1s linear infinite;
 	}
-	:root[data-loading] .sdp-menu::after
+	html[data-loading] .sdp-menu::after
 	{
 		content: attr(data-loading);
 		text-align: center;
@@ -1849,19 +1839,19 @@ html.updated .spd-updated
 
 @media (max-width: 1023px)
 {
-	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText
+	html[data-loading] .sdp-menu .slickdealsHeader__navItemText
 	{
 		position: relative;
 		overflow: unset !important;
 	}
-	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::before
+	html[data-loading] .sdp-menu .slickdealsHeader__navItemText::before
 	{
 		content: "⌛";
 		right: -1.5em;
 		line-height: 2.0em;
 		animation: spin 1s linear infinite;
 	}
-	:root[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
+	html[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 	{
 		content: attr(data-loading);
 		text-align: center;
