@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.9.28-93039
+// @version      23.10.1-52441
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,6 +17,8 @@ const linksData = {};
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
+const CHANGES = `+ changes log from previous version
++ clicking on update banner opens menu with changes log`;
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -181,7 +183,14 @@ const SETTINGS = (() =>
 		// notification popup
 		const elPopup = document.createElement("div");
 		elPopup.textContent = GM_info.script.name + " updated from v" + previousVersion + " to v" + VERSION;
-		elPopup.className = "spd-updated";
+		elPopup.className = "sdp-updated";
+		elPopup.addEventListener("click", () =>
+		{
+			const elMenu = document.querySelector(".sdp-menu");
+			const elFooter = elMenu.querySelector(".footer");
+			elFooter.click();
+			elMenu.firstElementChild.focus();
+		});
 		const onClick = () =>
 		{
 			window.removeEventListener("click", onClick, true);
@@ -1444,18 +1453,34 @@ const initMenu = elNav =>
 	}
 	elUl.append(elMenuItem);
 	elUl.append(createMenuItem("dealDiff"));
-	elUl.append(createMenuItem("highlightDiff", {
-		labelAfter: "%"
-	}));
+	elUl.append(createMenuItem("highlightDiff", {labelAfter: "%"}));
 	elUl.append(createMenuItem("thumbsUp"));
 	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
-	const elFooter = document.createElement("div");
+
+	const elFooter = document.createElement("label");
 	elFooter.className = "slickdealsHeaderDropdownItem footer";
-	elFooter.textContent = "v" + VERSION;
+	elFooter.setAttribute("for", "sdpChanges");
+	elFooter.dataset.label = "v" + VERSION;
 	elFooter.dataset[dataset] = "";
-	elUl.append(elFooter);
+
+	const elFooterCheckbox = document.createElement("input");
+	elFooterCheckbox.id = "sdpChanges";
+	elFooterCheckbox.type = "checkbox";
+
+	const elChanges = document.createElement("span");
+	elChanges.className = "changes";
+	elChanges.textContent = CHANGES;
+
+	const elChangesLink = document.createElement("a");
+	elChangesLink.className = "changesLink";
+	elChangesLink.href = "https://github.com/vanowm/slickdealsPlus/blob/master/CHANGES.md";
+	elChangesLink.target = "_blank";
+	elChangesLink.textContent = "more";
+
+	elChanges.append(elChangesLink);
+	elUl.append(elFooterCheckbox, elFooter, elChanges);
 };
 initMenu.counter = 1000;
 
@@ -1731,6 +1756,35 @@ html.freeOnly .frontpageGrid li:not(.free)
 	text-align: right;
 	opacity: 0.5;
 }
+.sdp-menu .footer::before
+{
+	content: attr(data-label);
+	text-align: right;
+	opacity: 0.5;
+	cursor: pointer;
+}
+#sdpChanges
+{
+	display: none;
+}
+.sdp-menu .changes
+{
+	display: none;
+}
+
+.changesLink
+{
+	display: block;
+	text-align: right;
+	font-size: 0.8em;
+}
+#sdpChanges:checked ~ .changes
+{
+	display: block;
+	margin: 0.6em;
+	text-align: left;
+	white-space: pre-wrap;
+}
 .sdp-menu ul[data-v-ID] .slickdealsHeaderDropdownItem.input
 {
 	padding: 0.35em 0.8em;
@@ -1771,7 +1825,7 @@ html[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 }
 
 /* update popup */
-html.updated .spd-updated
+html.updated .sdp-updated
 {
 	background-color: darkred;
 	width: 100%;
@@ -1785,6 +1839,7 @@ html.updated .spd-updated
 	font-size: 1rem;
 	color: white;
 	animation: shrink 60s ease 600s forwards;
+	cursor: pointer;
 }
 
 @keyframes shrink {
