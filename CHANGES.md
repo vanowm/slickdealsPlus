@@ -5,107 +5,110 @@ removed::before,
 added::before,
 unknown::before
 {
-	font-family: monospace;
-	width: 1em;
-	display: inline-block;
-	line-height: 1em;
-	vertical-align: middle;
-	font-weight: bold;
-	font-size: 1.2em;
-	margin-left: -1em;
+font-family: monospace;
+width: 1em;
+display: inline-block;
+line-height: 1em;
+vertical-align: middle;
+font-weight: bold;
+font-size: 1.2em;
+margin-left: -1em;
 }
 fixed::before
 {
-	content: "! ";
-	color: orange;
+content: "! ";
+color: orange;
 }
 changed::before
 {
-	content: "* ";
-	color: lightblue;
-	height: 1em;
-	line-height: 1.2em;
+content: "* ";
+color: lightblue;
+height: 1em;
+line-height: 1.2em;
 }
 removed::before
 {
-	content: "- ";
-	color: red;
+content: "- ";
+color: red;
 }
 added::before
 {
-	content: "+ ";
-	color: green;
+content: "+ ";
+color: green;
 }
 unknown::before
 {
-	content: "? ";
-	color: grey;
-	opacity: 0.5;
-	
+content: "? ";
+color: grey;
+opacity: 0.5;
+
 }
 date
 {
-	font-size: 0.8em;
-	color: grey;
-	opacity: 0.8;
-	font-style: italic;
-	line-height: 1em;
-	height: 1.2em;
-	display: inline-block;
-	vertical-align: middle;
+font-size: 0.8em;
+color: grey;
+opacity: 0.8;
+font-style: italic;
+line-height: 1em;
+height: 1.2em;
+display: inline-block;
+vertical-align: middle;
 }
 ul
 {
-	margin-left: 1em;
+margin-left: 1em;
 }
 li { list-style: none }
 p {margin-bottom: 0 !important;}
 details
 {
-	font-size: 0.8em;
-	float: right;
-	line-height: 4em;
-	position: absolute;
-	top: 0;
-	right: 2.2em;
-	opacity: 0.4;
-	transition: opacity 0.7s ease-in-out;
+font-size: 0.8em;
+float: right;
+line-height: 4em;
+position: absolute;
+top: 0;
+right: 2.2em;
+opacity: 0.4;
+transition: opacity 0.7s ease-in-out;
 }
 details[open]
 {
-	position: fixed;
-	background-color: var(--bgColor-default, var(--color-canvas-default));
-	border: 1px solid var(--borderColor-muted, var(--color-border-muted));
-	top: 0.5em;
-	right: 0.5em;
-	padding: 1em;
-	z-index: 1;
-	opacity: 1;
+position: fixed;
+background-color: var(--bgColor-default, var(--color-canvas-default));
+border: 1px solid var(--borderColor-muted, var(--color-border-muted));
+top: 0.5em;
+right: 0.5em;
+padding: 1em;
+z-index: 1;
+opacity: 1;
 }
 details[open] > summary
 {
-	line-height: 1em;
-	margin: 0.0em 0 1em;
-	text-align: center;
+line-height: 1em;
+margin: 0.0em 0 1em;
+text-align: center;
 }
 summary
 {
-	color: grey;
+color: grey;
 }
 
 details > div
 {
-	line-height: 1.2em;
+line-height: 1.2em;
 }
 details > div > *::before
 {
-	margin-left: 0;
+margin-left: 0;
 }</style>
-<details><summary>Legend</summary><div><added></added> Added<br><changed></changed> Changed<br><fixed></fixed> Fixed<br><removed></removed> Removed</div></details>
+<details><summary>Legend</summary><div><added></added>Added<br><changed></changed>Changed<br><fixed></fixed>Fixed<br><removed></removed>Removed</div></details>
 
 # Changes Log
 
-**[23.10.1-52441](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-01 05:24:41)</date>
+**[23.10.1-222851](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-02 02:28:51)</date>
+* <added title="Added">custom CSS (user can modify CSS)</added>
+
+**[23.10.1-52441](https://github.com/vanowm/slickdealsPlus/commit/dd351dd)** <date>(2023-10-01 05:24:41)</date>
 * <added title="Added">changes log from previous version</added>
 * <added title="Added">clicking on update banner opens menu with changes log</added>
 

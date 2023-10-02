@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.1-52441
+// @version      23.10.1-222851
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,8 +17,7 @@ const linksData = {};
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `+ changes log from previous version
-+ clicking on update banner opens menu with changes log`;
+const CHANGES = `+ custom CSS (user can modify CSS)`;
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -66,6 +65,13 @@ const SETTINGS = (() =>
 			description: "Highlight items with minimum of this score",
 			min: 0,
 			onChange: () => highlightCards(),
+		},
+		css: {
+			default: "",
+			type: "text",
+			name: "Custom CSS",
+			description: "Add custom CSS to the page",
+			onChange: () => customCSS()
 		},
 		dealDiff: {
 			default: 1,
@@ -120,7 +126,10 @@ const SETTINGS = (() =>
 			while (!result && i < length)
 				result = ~~a[i] - ~~b[i++];
 
-			return result < 0 ? -1 : (result ? 1 : 0);
+			if (result < 0)
+				return -1;
+
+			return result ? 1 : 0;
 		})(t => ("" + t)
 		.replace(/[^\d.]+/g, c => "." + (c.replace(/[\W_]+/, "").toUpperCase().charCodeAt() - 65_536) + ".")
 		.replace(/(?:\.0+)*(\.-\d+(?:\.\d+)?)\.*$/g, "$1")
@@ -302,6 +311,7 @@ const SETTINGS = (() =>
 
 		document.documentElement.classList.toggle(id, !!value);
 		settingsSave();
+		return true;
 	};
 	return new Proxy((id, value) => settingsFunction(id, value),
 		{
@@ -317,13 +327,14 @@ const SETTINGS = (() =>
 		});
 })();
 
+const fVoid = () => {};
 /**
  * Logs debug information to the console if debug mode is enabled.
  * @function
  * @param {...*} args - The arguments to log to the console.
  */
-const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : () => {}, {trace: console.trace.bind(console)});
-
+const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : fVoid, {trace: console.trace.bind(console)});
+const debugPrefix = "%cSlickdeals+ ";
 /*------------[ ad blocking ]------------*/
 /**
  * Removes ads from the DOM.
@@ -347,7 +358,7 @@ const noAds = (() =>
 
 				if (blocked)
 				{
-					debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c " + name,
+					debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c " + name,
 						colors[~~blocked],
 						colors[(this.tagName.toLowerCase() || "") + name],
 						value,
@@ -370,7 +381,7 @@ const noAds = (() =>
 	}));
 
 	if (!isNoAds)
-		return () => {};
+		return fVoid;
 
 	const fetch = window.fetch;
 	const open = XMLHttpRequest.prototype.open;
@@ -383,7 +394,7 @@ const noAds = (() =>
 		const blocked = isNoAds ? isAds(args[0]) : false;
 		if (blocked)
 		{
-			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c fetch",
+			debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c fetch",
 				colors[~~blocked],
 				colors.fetch,
 				args,
@@ -403,7 +414,7 @@ const noAds = (() =>
 		const blocked = isNoAds ? isAds(args[1]) : false;
 		if (blocked)
 		{
-			debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c XHR",
+			debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c XHR",
 				colors[~~blocked],
 				colors.xhr,
 				args,
@@ -443,7 +454,7 @@ const noAds = (() =>
 					const blocked = _isNoAds ? isAds(isSource ? value : undefined, isSource ? undefined : value) : false;
 					if (blocked)
 					{
-						debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name,
+						debug(debugPrefix + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name,
 							colors[~~blocked],
 							colors[(name === "src" ? this.tagName.toLowerCase() : "") + name],
 							value,
@@ -485,7 +496,7 @@ const noAds = (() =>
 
 				if (blocked)
 				{
-					debug("%cSlickdeals+ " + (blocked ? "blocked" : "allowed") + "%c DOM_" + name,
+					debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c DOM_" + name,
 						colors[~~blocked],
 						colors.dom,
 						node,
@@ -920,7 +931,7 @@ const processCards = (node, force) =>
 		let priceNew = Number.NaN;
 		if (price)
 		{
-			if ((price === "free"))
+			if (price === "free")
 				priceNew = 0;
 			else if (priceRegex.test(price))
 			{
@@ -1002,15 +1013,17 @@ const processCards = (node, force) =>
  */
 const highlightCards = node =>
 {
-	const nlItems = node instanceof NodeList
-		? node
-		: (node instanceof Element
-			? [node]
-			: $$(	"li.frontpageGrid__feedItem," + //front page
-					"li.carousel__slide," + // front page carousel
-					"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
-					"div.resultRow" //search result
-			, node, true));
+	let nlItems;
+	if (node instanceof NodeList)
+		nlItems = node;
+	else if (node instanceof Element)
+		nlItems = [node];
+	else
+		nlItems = $$(	"li.frontpageGrid__feedItem," + //front page
+						"li.carousel__slide," + // front page carousel
+						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
+						"div.resultRow" //search result
+		, node, true);
 
 	if (nlItems.length === 0)
 		return;
@@ -1258,7 +1271,7 @@ const updateLinks = () =>
  */
 const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
-	.catch(() => {});
+	.catch(fVoid);
 
 /**
  * Extracts the ID and type of a deal from a given URL.
@@ -1315,25 +1328,33 @@ const initMenu = elNav =>
 	const createMenuItem = (id, options = {}) =>
 	{
 		const type = SETTINGS.$type[id];
-		const text = SETTINGS.$name[id];
+		const label = SETTINGS.$name[id];
 		const description = SETTINGS.$description[id];
 		const elStyle = document.createElement("style");
-		const elSetting = document.createElement(type === "number" ? "input" : "a");
+		const types = {
+			string : "input",
+			number : "input",
+			text : "textarea",
+			checkbox : "a",
+			radio : "a"
+		};
+		const elSetting = document.createElement(types[type] || "a");
 		const elLi = elLiDefault.cloneNode(true);
 		let elLabelBefore;
 		let elLabelAfter;
+		const events = {};
 		if (type === "number")
 		{
 			//only allow positive round numbers
-			elSetting.addEventListener("keypress", evt =>
+			events.keypress = evt =>
 			{
 				if (evt.charCode < 48 || evt.charCode > 57)
 				{
 					evt.preventDefault();
 					evt.stopPropagation();
 				}
-			});
-			elSetting.addEventListener("input", () => SETTINGS(id, ~~elSetting.value));
+			};
+			events.input = () => SETTINGS(id, ~~elSetting.value);
 			elSetting.type = "number";
 			elSetting.min = SETTINGS.$min[id] || 0;
 			if (SETTINGS.$max[id] !== undefined)
@@ -1345,13 +1366,23 @@ const initMenu = elNav =>
 
 			elSetting.step = 1;
 			elLabelBefore = document.createElement("span");
-			elLabelBefore.textContent = text;
+			elLabelBefore.textContent = label;
 			elLi.classList.add("input");
+		}
+		else if (type === "text")
+		{
+			elSetting.setAttribute("autocorrect", "false");
+			elSetting.setAttribute("spellcheck", "false");
+
+			elLabelBefore = document.createElement("div");
+			elLabelBefore.textContent = label;
+			elSetting.value = SETTINGS(id);
+			events.input = () => SETTINGS(id, elSetting.value);
 		}
 		else //checkboxes
 		{
-			elSetting.addEventListener("click", () => SETTINGS(id, ~~!SETTINGS(id)));
-			elSetting.addEventListener("keypress", evt =>
+			events.click = () => SETTINGS(id, ~~!SETTINGS(id));
+			events.keypress = evt =>
 			{
 				if (evt.key === " " || evt.key === "Enter")
 				{
@@ -1359,10 +1390,16 @@ const initMenu = elNav =>
 					evt.stopPropagation();
 					SETTINGS(id, ~~!SETTINGS(id));
 				}
-			});
-			elSetting.textContent = text;
+			};
+			elSetting.textContent = label;
 			elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
 			elSetting.classList.add("slickdealsHeaderDropdownItem__link");
+		}
+		options = Object.assign({events}, options);
+
+		for(const eventType in options.events)
+		{
+			elSetting.addEventListener(eventType, options.events[eventType]);
 		}
 		elSetting.value = SETTINGS(id);
 		elSetting.id = id;
@@ -1459,6 +1496,32 @@ const initMenu = elNav =>
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
 
+	elUl.append(createMenuItem("css", {
+		events: {
+			input: evt =>
+			{
+				clearTimeout(customCSS.timeout);
+				customCSS.timeout = setTimeout(() =>
+				{
+					SETTINGS.css = evt.target.value;
+				}, 1000);
+			},
+			keydown: evt =>
+			{
+				if (evt.key !== "Tab")
+					return;
+
+				const el = evt.target;
+				evt.preventDefault();
+				let start = el.selectionStart;
+				const end = el.selectionEnd;
+				el.value = el.value.slice(0, start)	+ "\t" + el.value.slice(end);
+				el.selectionStart = ++start;
+				el.selectionEnd = start;
+			}
+		}
+	}));
+
 	const elFooter = document.createElement("label");
 	elFooter.className = "slickdealsHeaderDropdownItem footer";
 	elFooter.setAttribute("for", "sdpChanges");
@@ -1483,6 +1546,23 @@ const initMenu = elNav =>
 	elUl.append(elFooterCheckbox, elFooter, elChanges);
 };
 initMenu.counter = 1000;
+
+/**
+ * Creates a <style> element in the <head> of the document and sets its text content to the CSS specified in the SETTINGS object.
+ * If the <style> element already exists, updates its text content instead.
+ *
+ * @function
+ * @returns {void}
+ */
+const customCSS = () =>
+{
+	if (!customCSS.css)
+	{
+		customCSS.css = document.createElement("style");
+	}
+	customCSS.css.textContent = SETTINGS.css;
+	document.body.append(customCSS.css);
+};
 
 /**
  * The main function that initializes the Slickdeals+ script.
@@ -1519,11 +1599,11 @@ const init = () =>
 		processCards(elPageContent);
 		processLinks(elPageContent);
 	}
+	customCSS();
 	debug(GM_info.script.name, "v" + VERSION, "initialized");
 };//init()
 
 document.addEventListener("DOMContentLoaded", init, false);
-// eslint-disable-next-line quotes
 })(`a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
 {
 	color: #00b309;
@@ -1750,7 +1830,12 @@ html.freeOnly .frontpageGrid li:not(.free)
 {
 	white-space: nowrap;
 }
-
+.sdp-menu textarea
+{
+	background-color: transparent;
+	width: 100%;
+	height: 5em;
+}
 .sdp-menu .footer
 {
 	text-align: right;
@@ -1974,5 +2059,5 @@ html.dealDiff a[data-deal-diff]::after /* deal list page */
 }
 .pageContent--reserveAnnouncementBar { /* top banner */
 	padding-top: 0 !important;
-}`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties, indent*/,
+}`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
