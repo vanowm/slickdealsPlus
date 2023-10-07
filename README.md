@@ -13,8 +13,5 @@ Features:
 * Highlight free items
 * Show only free items
 * Resolve links (it sends a URL to a 3rd party service which returns final destination of that URL)
-* Custom CSS styles
 
-**Warning: incorrect CSS can ruin the website!**
-
- _In case the menu no longer available, you'll need to reset settings by opening DevTools (F12) → Application → Local Storage ⇾ search for `Slickdeals+` entry and delete it. Reload the page._
+[Changes](https://vanowm.github.io/slickdealsPlus/CHANGES.html)

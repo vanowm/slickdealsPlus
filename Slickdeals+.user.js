@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.7-160105
+// @version      23.10.7-190707
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,10 +17,7 @@ const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `+ CHANGES.html
-! error if stored settings contains unknown key
-! if API server returns non-url data, it's no longer saved
-* css field is hidden by default (must manually edit local storage)`;
+const CHANGES = `* updated link to changes log`;
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -1590,7 +1587,7 @@ const initMenu = elNav =>
 
 	const elChangesLink = document.createElement("a");
 	elChangesLink.className = "changesLink";
-	elChangesLink.href = "https://github.com/vanowm/slickdealsPlus/blob/master/CHANGES.md";
+	elChangesLink.href = "https://vanowm.github.io/slickdealsPlus/CHANGES.html";
 	elChangesLink.target = "_blank";
 	elChangesLink.textContent = "more";
 

@@ -1,4 +1,10 @@
-<style type="text/css">fixed::before,
+<style type="text/css">html
+{
+	max-width: 50em;
+	margin: auto;
+	position: relative;
+}
+fixed::before,
 changed::before,
 removed::before,
 added::before,
@@ -65,24 +71,32 @@ p {
 	margin-bottom: 0 !important;
 }
 
+h1:first-of-type
+{
+	margin-top: 0 !important;
+}
 details {
+	-webkit-user-select: none;
+	user-select: none;
 	font-size: 0.8em;
 	float: right;
-	line-height: 4em;
-	position: absolute;
-	top: 0;
-	right: 2.2em;
+	line-height: 3em;
+	position: sticky;
+	margin-top: -3.0em;
+	margin-right: -0.8em;
+	top: 0.5em;
+	right: 0.5em;
 	opacity: 0.4;
 	transition: opacity 0.7s ease-in-out;
+	z-index: 1;
 }
 
 details[open] {
-	position: fixed;
 	background-color: var(--bgColor-default, var(--color-canvas-default));
 	border: 1px solid var(--borderColor-muted, var(--color-border-muted));
-	top: 0.5em;
-	right: 0.5em;
 	padding: 1em;
+	margin-right: -2.2em;
+	right: 0.5em;
 	z-index: 1;
 	opacity: 1;
 }
@@ -109,7 +123,10 @@ details>div>*::before {
 
 # Changes Log
 
-**[23.10.7-160105](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-07 16:01:05)</date>
+**[23.10.7-190707](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-07 19:07:07)</date>
+* <changed title="Changed">updated link to changes log</changed>
+
+**[23.10.7-160105](https://github.com/vanowm/slickdealsPlus/commit/09c9df2)** <date>(2023-10-07 16:01:05)</date>
 * <added title="Added">CHANGES.html</added>
 * <fixed title="Fixed">error if stored settings contains unknown key</fixed>
 * <fixed title="Fixed">if API server returns non-url data, it's no longer saved</fixed>
