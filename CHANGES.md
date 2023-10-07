@@ -1,111 +1,121 @@
-<style type="text/css">
-fixed::before,
+<style type="text/css">fixed::before,
 changed::before,
 removed::before,
 added::before,
-unknown::before
-{
-font-family: monospace;
-width: 1em;
-display: inline-block;
-line-height: 1em;
-vertical-align: middle;
-font-weight: bold;
-font-size: 1.2em;
-margin-left: -1em;
-}
-fixed::before
-{
-content: "! ";
-color: orange;
-}
-changed::before
-{
-content: "* ";
-color: lightblue;
-height: 1em;
-line-height: 1.2em;
-}
-removed::before
-{
-content: "- ";
-color: red;
-}
-added::before
-{
-content: "+ ";
-color: green;
-}
-unknown::before
-{
-content: "? ";
-color: grey;
-opacity: 0.5;
-
-}
-date
-{
-font-size: 0.8em;
-color: grey;
-opacity: 0.8;
-font-style: italic;
-line-height: 1em;
-height: 1.2em;
-display: inline-block;
-vertical-align: middle;
-}
-ul
-{
-margin-left: 1em;
-}
-li { list-style: none }
-p {margin-bottom: 0 !important;}
-details
-{
-font-size: 0.8em;
-float: right;
-line-height: 4em;
-position: absolute;
-top: 0;
-right: 2.2em;
-opacity: 0.4;
-transition: opacity 0.7s ease-in-out;
-}
-details[open]
-{
-position: fixed;
-background-color: var(--bgColor-default, var(--color-canvas-default));
-border: 1px solid var(--borderColor-muted, var(--color-border-muted));
-top: 0.5em;
-right: 0.5em;
-padding: 1em;
-z-index: 1;
-opacity: 1;
-}
-details[open] > summary
-{
-line-height: 1em;
-margin: 0.0em 0 1em;
-text-align: center;
-}
-summary
-{
-color: grey;
+unknown::before {
+	font-family: monospace;
+	width: 1em;
+	display: inline-block;
+	line-height: 1em;
+	vertical-align: middle;
+	font-weight: bold;
+	font-size: 1.2em;
+	margin-left: -1em;
 }
 
-details > div
-{
-line-height: 1.2em;
+fixed::before {
+	content: "! ";
+	color: orange;
 }
-details > div > *::before
-{
-margin-left: 0;
-}</style>
+
+changed::before {
+	content: "* ";
+	color: lightblue;
+	height: 1em;
+	line-height: 1.2em;
+}
+
+removed::before {
+	content: "- ";
+	color: red;
+}
+
+added::before {
+	content: "+ ";
+	color: green;
+}
+
+unknown::before {
+	content: "? ";
+	color: grey;
+	opacity: 0.5;
+
+}
+
+date {
+	font-size: 0.8em;
+	color: grey;
+	opacity: 0.8;
+	font-style: italic;
+	line-height: 1em;
+	height: 1.2em;
+	display: inline-block;
+	vertical-align: middle;
+}
+
+ul {
+	margin-left: 1em;
+}
+
+li {
+	list-style: none
+}
+
+p {
+	margin-bottom: 0 !important;
+}
+
+details {
+	font-size: 0.8em;
+	float: right;
+	line-height: 4em;
+	position: absolute;
+	top: 0;
+	right: 2.2em;
+	opacity: 0.4;
+	transition: opacity 0.7s ease-in-out;
+}
+
+details[open] {
+	position: fixed;
+	background-color: var(--bgColor-default, var(--color-canvas-default));
+	border: 1px solid var(--borderColor-muted, var(--color-border-muted));
+	top: 0.5em;
+	right: 0.5em;
+	padding: 1em;
+	z-index: 1;
+	opacity: 1;
+}
+
+details[open]>summary {
+	line-height: 1em;
+	margin: 0.0em 0 1em;
+	text-align: center;
+}
+
+summary {
+	color: grey;
+}
+
+details>div {
+	line-height: 1.2em;
+}
+
+details>div>*::before {
+	margin-left: 0;
+}
+</style>
 <details><summary>Legend</summary><div><added></added>Added<br><changed></changed>Changed<br><fixed></fixed>Fixed<br><removed></removed>Removed</div></details>
 
 # Changes Log
 
-**[23.10.1-222851](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-02 02:28:51)</date>
+**[23.10.7-160105](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-07 16:01:05)</date>
+* <added title="Added">CHANGES.html</added>
+* <fixed title="Fixed">error if stored settings contains unknown key</fixed>
+* <fixed title="Fixed">if API server returns non-url data, it's no longer saved</fixed>
+* <changed title="Changed">css field is hidden by default (must manually edit local storage)</changed>
+
+**[23.10.1-222851](https://github.com/vanowm/slickdealsPlus/commit/8cb9a6a)** <date>(2023-10-02 02:28:51)</date>
 * <added title="Added">custom CSS (user can modify CSS)</added>
 
 **[23.10.1-52441](https://github.com/vanowm/slickdealsPlus/commit/dd351dd)** <date>(2023-10-01 05:24:41)</date>

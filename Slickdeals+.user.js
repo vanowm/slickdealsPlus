@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.1-222851
+// @version      23.10.7-160105
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,11 +13,14 @@
 {
 "use strict";
 
-const linksData = {};
+const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `+ custom CSS (user can modify CSS)`;
+const CHANGES = `+ CHANGES.html
+! error if stored settings contains unknown key
+! if API server returns non-url data, it's no longer saved
+* css field is hidden by default (must manually edit local storage)`;
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -58,7 +61,7 @@ const SETTINGS = (() =>
 			name: "Debug",
 			description: "Show debug messages in the console",
 		},
-		thumbsUp: { /* highlight deals with this minimum score */
+		highlightRating: { /* highlight deals with this minimum score */
 			default: 0,
 			type: "number",
 			name: "Highlight score ≥",
@@ -67,16 +70,17 @@ const SETTINGS = (() =>
 			onChange: () => highlightCards(),
 		},
 		css: {
-			default: "",
+			// eslint-disable-next-line unicorn/no-null
+			default: null, // null = hidden
 			type: "text",
 			name: "Custom CSS",
 			description: "Add custom CSS to the page",
 			onChange: () => customCSS()
 		},
-		dealDiff: {
+		showDiff: {
 			default: 1,
 			name: "Price difference",
-			description: "Display price/percent difference between current and original prices",
+			description: "Show price/percent difference between current and original prices",
 		},
 		highlightDiff: { /* highlight deals with this minimum price difference percent */
 			default: 0,
@@ -109,11 +113,11 @@ const SETTINGS = (() =>
 	 *
 	 * @function
 	 * @see {@link https://jsfiddle.net/vanowm/p7uvtbor/ jsFiddle}
-	 * @param {string|number} a - The first version string or number to compare.
-	 * @param {string|number} b - The second version string or number to compare.
-	 * @returns {number} -1 if the first version is less than the second,
-	 *                    0 if they are equal, or
-	 *                    1 if the first version is greater than the second.
+	 * @param {string} a - The first version string to compare.
+	 * @param {string} b - The second version string to compare.
+	 * @returns {number} -1 if a < b,
+	 *                    0 if a == b,
+	 *                    1 if a > b.
 	 */
 	const compareVersion = ((prep, length, i, result) =>
 		(a, b) =>
@@ -148,6 +152,16 @@ const SETTINGS = (() =>
 		{
 			settings.set("resolveLinks", settings.get("resolvedClick"));
 		}
+		if (compareVersion(previousVersion, "23.10.4-205802") < 0)
+		{
+			if (settings.get("css") === "")
+				// eslint-disable-next-line unicorn/no-null
+				settings.set("css", null);
+
+			if (settings.has("thumbsUp"))
+				settings.set("highlightRating", settings.get("thumbsUp"));
+
+		}
 	}
 	/* clean up old/invalid settings */
 	const isLink = /^\d/;
@@ -158,8 +172,7 @@ const SETTINGS = (() =>
 
 		if (!Object.prototype.hasOwnProperty.call(defaultSettings, id))
 			settings.delete(id);
-
-		if (typeof settings.get(id) !== typeof defaultSettings[id].default)
+		else if (typeof settings.get(id) !== typeof defaultSettings[id].default)
 			settings.set(id, defaultSettings[id].default);
 	}
 
@@ -217,14 +230,21 @@ const SETTINGS = (() =>
 	settingsInit();
 
 	/**
-	 * Resets the user's settings to their default values.
-	 * @function
-	 * @returns {void}
+	 * Returns a read-only proxy object that retrieves the value of a specific key from the default settings object.
+	 *
+	 * @param {string} key - The key to retrieve from the default settings object.
+	 * @returns {Object} - A read-only proxy object that retrieves the value of the specified key from the default settings object.
 	 */
 	const settingsGetData = key => new Proxy(defaultSettings, {
 		get: (target, name) => Reflect.get(target[name], key),
 		set: () => true, //read-only
 	});
+
+	/**
+	 * Resets all settings to their default values, except for the version number.
+	 * @function
+	 * @name settingsReset
+	 */
 	const settingsReset = () =>
 	{
 		for(const i in defaultSettings)
@@ -236,6 +256,19 @@ const SETTINGS = (() =>
 		settingsSave();
 	};
 	const defaultKeys = Object.keys(defaultSettings);
+	/**
+	 * Object containing various settings commands for the Slickdeals+ script.
+	 * @typedef {Object} SettingsCommands
+	 * @property {*} $default - The default value for the setting.
+	 * @property {string} $type - The type of the setting.
+	 * @property {string} $name - The name of the setting.
+	 * @property {string} $description - The description of the setting.
+	 * @property {*} $min - The minimum value for the setting.
+	 * @property {*} $max - The maximum value for the setting.
+	 * @property {function} $onChange - The function to be called when the setting is changed.
+	 * @property {*} $keys - The default keys for the setting.
+	 * @property {function} $reset - The function to reset the setting to its default value.
+	 */
 	const settingsCommands = {
 		$default: settingsGetData("default"),
 		$type: settingsGetData("type"),
@@ -294,11 +327,10 @@ const SETTINGS = (() =>
 		settingsSave();
 
 	/**
-	 * Gets or sets a user setting and updates the HTML element accordingly.
-	 * @function
+	 * Gets or sets a setting value and updates the UI accordingly.
 	 * @param {string} id - The ID of the setting to get or set.
-	 * @param {*} [value] - The value to set the setting to. If omitted, the current value of the setting is returned.
-	 * @returns {*} The current value of the setting, or undefined if setting a new value.
+	 * @param {*} [value] - The value to set the setting to. If not provided, the current value of the setting is returned.
+	 * @returns {boolean|*} - Returns `true` if the setting was successfully set, otherwise returns the current value of the setting.
 	 */
 	const settingsFunction = (id, value) =>
 	{
@@ -327,17 +359,30 @@ const SETTINGS = (() =>
 		});
 })();
 
+/**
+ * A function that does nothing and returns undefined.
+ * @returns {undefined}
+ */
 const fVoid = () => {};
+
 /**
  * Logs debug information to the console if debug mode is enabled.
  * @function
- * @param {...*} args - The arguments to log to the console.
+ * @property {function} trace - Outputs a stack trace to the console.
+  * @param {...*} args - The arguments to log to the console.
  */
-const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : fVoid, {trace: console.trace.bind(console)});
+const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : fVoid
+	, {trace: console.trace.bind(console)});
 const debugPrefix = "%cSlickdeals+ ";
+
 /*------------[ ad blocking ]------------*/
 /**
- * Removes ads from the DOM.
+ * This code block defines a function that blocks ads on a webpage.
+ * It overrides the `setAttribute`, `fetch`, and `open` methods to intercept requests and block ads if necessary.
+ * It also overrides the specified properties and methods of a prototype to intercept requests and block ads if necessary.
+ * The function checks if the `isNoAds` setting is enabled and if the element's `src` or `href` attribute matches an ad pattern.
+ * If it does, the element is removed from the DOM.
+ * The function also intercepts `fetch` and `XMLHttpRequest` requests and returns a 403 response if an ad is detected.
  * @function
  * @param {HTMLElement} parent - The HTML element to check for ads.
  * @returns {void}
@@ -915,13 +960,13 @@ const processCards = (node, force) =>
 	if (nlItems.length === 0)
 		return;
 
-	const priceRegex = /^[\s\w]*~?\$/;
-	const priceRegexFrom = /^(?:from\s)?(\d+)\sfor\s\$?([\d,.]+)/g;
-	const priceRegexCommas = /,/g;
-	const priceRegexTrim = /[\s\w]*~?\$([\d,.]+)(?:\s.*)?/;
-	const priceRegexFree = /free/;
-	const priceRegexPrice = /^[\s\w]*~?\$([\d,.]+)/;
-	const priceRegexOff = /(?:\$?([\d,.]+))?\soff(?:\s\$?([\d,.]+))?$/;
+	const rePrice = /^[\s\w]*~?\$/;
+	const rePriceFrom = /^(?:from\s)?(\d+)\sfor\s\$?([\d,.]+)/g;
+	const rePriceCommas = /,/g;
+	const rePriceTrim = /[\s\w]*~?\$([\d,.]+)(?:\s.*)?/;
+	const rePriceFree = /free/;
+	const rePricePrice = /^[\s\w]*~?\$([\d,.]+)/;
+	const rePriceOff = /(?:\$?([\d,.]+))?\soff(?:\s\$?([\d,.]+))?$/;
 	for (let i = 0; i < nlItems.length; i++)
 	{
 		const elPrice = nlItems[i];
@@ -933,12 +978,12 @@ const processCards = (node, force) =>
 		{
 			if (price === "free")
 				priceNew = 0;
-			else if (priceRegex.test(price))
+			else if (rePrice.test(price))
 			{
 				priceNew = Number.parseFloat(price
-					.replace(priceRegexFrom, priceDivide) // 2 for $10
-					.replace(priceRegexTrim, "$1") // remove everything after first number ($xx off $yy)
-					.replace(priceRegexCommas, "")); // remove commas
+					.replace(rePriceFrom, priceDivide) // 2 for $10
+					.replace(rePriceTrim, "$1") // remove everything after first number ($xx off $yy)
+					.replace(rePriceCommas, "")); // remove commas
 			}
 
 		}
@@ -960,20 +1005,20 @@ const processCards = (node, force) =>
 			elParent = elWrapper;
 		}
 		const priceRetail = Number.parseFloat(trim((elPriceRetail || {}).textContent)
-			.replace(priceRegexPrice, "$1")
-			.replace(priceRegexCommas, ""));
+			.replace(rePricePrice, "$1")
+			.replace(rePriceCommas, ""));
 
 		const priceOld = Number.parseFloat(trim((elPriceOld || {}).textContent)
-			.replace(priceRegexPrice, "$1")
-			.replace(priceRegexCommas, ""));
+			.replace(rePricePrice, "$1")
+			.replace(rePriceCommas, ""));
 
-		const off = price.match(priceRegexOff);
+		const off = price.match(rePriceOff);
 		const priceOrig = Number.parseFloat(off && off[2]);
 		const priceBase = priceRetail || priceOld || priceOrig;
 		if (priceBase && off)
 			priceNew = priceBase - priceNew;
 
-		const priceFree = price && price.match(priceRegexFree) || priceNew === 0;
+		const priceFree = price && price.match(rePriceFree) || priceNew === 0;
 		const priceDifference = priceBase - priceNew;
 		const priceDealPercent = Math.round(priceDifference * 100 / priceBase);
 		const elCard = elParent.closest(
@@ -1041,7 +1086,7 @@ const highlightCards = node =>
 		if (elVotes && elVotes.textContent !== "")
 		{
 			const votes = Number.parseInt(elVotes.textContent);
-			elCard.classList.toggle("thumbsUp", SETTINGS.thumbsUp && votes > 0 && votes >= SETTINGS.thumbsUp);
+			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
 		}
 		if (elCard.dataset.dealPercent)
 		{
@@ -1175,6 +1220,9 @@ const processLinks = (node, force) =>
 				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
 				try
 				{
+					if (!/^https?:\/\//.test(response))
+						return;
+
 					SETTINGS(id + type, response);
 					for(let i = 0; i < aLinks.length; i++)
 						linkUpdate(aLinks[i], response);
@@ -1240,9 +1288,10 @@ const linkUpdate = (elA, url, update) =>
 };
 
 /**
- * Updates all unresolved links on the page.
- * @function
-*/
+ * Updates links on the page based on the current settings.
+ * If resolveLinks is enabled, it processes all unresolved links on the page.
+ * Otherwise, it updates all links in the linksData object.
+ */
 const updateLinks = () =>
 {
 	if (SETTINGS.resolveLinks)
@@ -1274,10 +1323,10 @@ const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {me
 	.catch(fVoid);
 
 /**
- * Extracts the ID and type of a deal from a given URL.
+* Extracts the ID and type of a deal from a given URL.
  * @function
- * @param {string} url - The URL to extract the ID and type from.
- * @returns {Object|boolean} An object containing the ID and type of the deal, or false if no ID or type could be found.
+ * @param {string} url - The URL to parse.
+ * @returns {Object|boolean} - An object containing the ID and type of the resource, or false if no ID was found.
  */
 const getUrlInfo = (() =>
 {
@@ -1285,7 +1334,7 @@ const getUrlInfo = (() =>
 	const queryConvert = {
 		sdtid : "tid"
 	};
-	const lnoRegex = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
+	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
 	return url =>
 	{
 		let type;
@@ -1301,7 +1350,7 @@ const getUrlInfo = (() =>
 
 		type = queryConvert[type] || type;
 
-		const matchLNO = lnoRegex.exec(url);
+		const matchLNO = reLno.exec(url);
 		if (matchLNO)
 			id += "-" + matchLNO[1];
 
@@ -1489,38 +1538,41 @@ const initMenu = elNav =>
 		elMenuItem.dataset.loading = loading;
 	}
 	elUl.append(elMenuItem);
-	elUl.append(createMenuItem("dealDiff"));
+	elUl.append(createMenuItem("showDiff"));
 	elUl.append(createMenuItem("highlightDiff", {labelAfter: "%"}));
-	elUl.append(createMenuItem("thumbsUp"));
+	elUl.append(createMenuItem("highlightRating"));
 	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
 
-	elUl.append(createMenuItem("css", {
-		events: {
-			input: evt =>
-			{
-				clearTimeout(customCSS.timeout);
-				customCSS.timeout = setTimeout(() =>
+	if (SETTINGS.css !== null)
+	{
+		elUl.append(createMenuItem("css", {
+			events: {
+				input: evt =>
 				{
-					SETTINGS.css = evt.target.value;
-				}, 1000);
-			},
-			keydown: evt =>
-			{
-				if (evt.key !== "Tab")
-					return;
+					clearTimeout(customCSS.timeout);
+					customCSS.timeout = setTimeout(() =>
+					{
+						SETTINGS.css = evt.target.value;
+					}, 1000);
+				},
+				keydown: evt =>
+				{
+					if (evt.key !== "Tab")
+						return;
 
-				const el = evt.target;
-				evt.preventDefault();
-				let start = el.selectionStart;
-				const end = el.selectionEnd;
-				el.value = el.value.slice(0, start)	+ "\t" + el.value.slice(end);
-				el.selectionStart = ++start;
-				el.selectionEnd = start;
+					const el = evt.target;
+					evt.preventDefault();
+					let start = el.selectionStart;
+					const end = el.selectionEnd;
+					el.value = el.value.slice(0, start)	+ "\t" + el.value.slice(end);
+					el.selectionStart = ++start;
+					el.selectionEnd = start;
+				}
 			}
-		}
-	}));
+		}));
+	}
 
 	const elFooter = document.createElement("label");
 	elFooter.className = "slickdealsHeaderDropdownItem footer";
@@ -1548,8 +1600,7 @@ const initMenu = elNav =>
 initMenu.counter = 1000;
 
 /**
- * Creates a <style> element in the <head> of the document and sets its text content to the CSS specified in the SETTINGS object.
- * If the <style> element already exists, updates its text content instead.
+ * Injects custom CSS into the document.
  *
  * @function
  * @returns {void}
@@ -1576,8 +1627,8 @@ const init = () =>
 	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
 
 	document.body.classList.toggle("darkMode", isDarkMode);
-	const cssFindIdRegex = /^v([A-F]|-\d)/;
-	const cssFindId = cssFindIdRegex.test.bind(cssFindIdRegex);
+	const reCssFindId = /^v([A-F]|-\d)/;
+	const cssFindId = reCssFindId.test.bind(reCssFindId);
 	style.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
 	{
 		const element = document.body.querySelector(query);
@@ -1644,17 +1695,17 @@ body.darkMode li.free
 }
 
 
-li.thumbsUp .dealCard[data-v-ID],
-div.thumbsUp,
-li.thumbsUp
+li.highlightRating .dealCard[data-v-ID],
+div.highlightRating,
+li.highlightRating
 {
 	--backgroundColor: #E4FFDD;
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-body.darkMode li.thumbsUp .dealCard[data-v-ID],
-body.darkMode div.thumbsUp,
-body.darkMode li.thumbsUp
+body.darkMode li.highlightRating .dealCard[data-v-ID],
+body.darkMode div.highlightRating,
+body.darkMode li.highlightRating
 {
 	--backgroundColor: #222C21;
 	--cardBackgroundColor: var(--backgroundColor);
@@ -1677,7 +1728,7 @@ body.darkMode li.highlightDiff
 /* search results */
 .resultRow.free,
 .resultRow.highlightDiff,
-.resultRow.thumbsUp
+.resultRow.highlightRating
 {
 	background-color: var(--backgroundColor);
 }
@@ -1690,8 +1741,8 @@ body.darkMode li.highlightDiff
 
 div.free,
 li.free,
-div.thumbsUp,
-li.thumbsUp,
+div.highlightRating,
+li.highlightRating,
 div.highlightDiff,
 li.highlightDiff
 {
@@ -2041,11 +2092,11 @@ html.updated .sdp-updated
 	gap: inherit;
 }
 
-html.dealDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
-html.dealDiff .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
-html.dealDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
-html.dealDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
-html.dealDiff a[data-deal-diff]::after /* deal list page */
+html.showDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
+html.showDiff .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
+html.showDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
+html.showDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
+html.showDiff a[data-deal-diff]::after /* deal list page */
 {
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;

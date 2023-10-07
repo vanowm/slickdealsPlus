@@ -1,0 +1,360 @@
+<style type="text/css">html {
+    font-family: "Segoe WPC", "Segoe UI", sans-serif;
+    padding: 1.5em;
+    --color-canvas-default: #0d1117;
+    --color-border-muted: #21262d;
+    --color-accent-fg: #2f81f7;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+a {
+    text-decoration: none;
+    background-color: transparent;
+    color: var(--fgColor-accent, var(--color-accent-fg));
+}
+
+h1 {
+    margin-bottom: 16px;
+    font-weight: var(--base-text-weight-semibold, 600);
+    line-height: 1.25;
+    margin: 0.67em 0;
+    padding-bottom: 0.3em;
+    font-size: 2em;
+    border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));
+}
+
+summary {
+    cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+    html {
+        background: var(--color-canvas-default);
+        color: #e6edf3;
+    }
+}
+</style>
+<style type="text/css">fixed::before,
+changed::before,
+removed::before,
+added::before,
+unknown::before {
+    font-family: monospace;
+    width: 1em;
+    display: inline-block;
+    line-height: 1em;
+    vertical-align: middle;
+    font-weight: bold;
+    font-size: 1.2em;
+    margin-left: -1em;
+}
+
+fixed::before {
+    content: "! ";
+    color: orange;
+}
+
+changed::before {
+    content: "* ";
+    color: lightblue;
+    height: 1em;
+    line-height: 1.2em;
+}
+
+removed::before {
+    content: "- ";
+    color: red;
+}
+
+added::before {
+    content: "+ ";
+    color: green;
+}
+
+unknown::before {
+    content: "? ";
+    color: grey;
+    opacity: 0.5;
+
+}
+
+date {
+    font-size: 0.8em;
+    color: grey;
+    opacity: 0.8;
+    font-style: italic;
+    line-height: 1em;
+    height: 1.2em;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+ul {
+    margin-left: 1em;
+}
+
+li {
+    list-style: none
+}
+
+p {
+    margin-bottom: 0 !important;
+}
+
+details {
+    font-size: 0.8em;
+    float: right;
+    line-height: 4em;
+    position: absolute;
+    top: 0;
+    right: 2.2em;
+    opacity: 0.4;
+    transition: opacity 0.7s ease-in-out;
+}
+
+details[open] {
+    position: fixed;
+    background-color: var(--bgColor-default, var(--color-canvas-default));
+    border: 1px solid var(--borderColor-muted, var(--color-border-muted));
+    top: 0.5em;
+    right: 0.5em;
+    padding: 1em;
+    z-index: 1;
+    opacity: 1;
+}
+
+details[open]>summary {
+    line-height: 1em;
+    margin: 0.0em 0 1em;
+    text-align: center;
+}
+
+summary {
+    color: grey;
+}
+
+details>div {
+    line-height: 1.2em;
+}
+
+details>div>*::before {
+    margin-left: 0;
+}
+</style>
+<p><details><summary>Legend</summary><div><added></added>Added<br><changed></changed>Changed<br><fixed></fixed>Fixed<br><removed></removed>Removed</div></details></p>
+<h1 id="changeslog">Changes Log</h1>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/">23.10.7-160105</a></strong> <date>(2023-10-07 16:01:05)</date></p>
+<ul>
+<li><added title="Added">CHANGES.html</added></li>
+<li><fixed title="Fixed">error if stored settings contains unknown key</fixed></li>
+<li><fixed title="Fixed">if API server returns non-url data, it's no longer saved</fixed></li>
+<li><changed title="Changed">css field is hidden by default (must manually edit local storage)</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/8cb9a6a">23.10.1-222851</a></strong> <date>(2023-10-02 02:28:51)</date></p>
+<ul>
+<li><added title="Added">custom CSS (user can modify CSS)</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/dd351dd">23.10.1-52441</a></strong> <date>(2023-10-01 05:24:41)</date></p>
+<ul>
+<li><added title="Added">changes log from previous version</added></li>
+<li><added title="Added">clicking on update banner opens menu with changes log</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/39a69c9">23.9.28-93039</a></strong> <date>(2023-09-28 14:31:02)</date></p>
+<ul>
+<li><changed title="Changed">versioning to yy.m.d-Hmmss format</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/50dae16">23.9.28011831</a></strong> <date>(2023-09-28 05:23:34)</date></p>
+<ul>
+<li><added title="Added">Option to show/hide price difference</added></li>
+<li><added title="Added">Option to highlight items with certain price difference</added></li>
+<li><changed title="Changed">changed versioning to CalVer</changed></li>
+<li><changed title="Changed">Price difference moved below the price</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/a95ad1d">1.21.3</a></strong> <date>(2023-09-27 13:45:29)</date></p>
+<ul>
+<li><fixed title="Fixed">long price line would break the card</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/29d8521">1.21.2</a></strong> <date>(2023-09-26 04:22:38)</date></p>
+<ul>
+<li><added title="Added">update notification banner</added></li>
+<li><added title="Added">current version indicator in the menu</added></li>
+<li><fixed title="Fixed">wrong colors some menu items with default theme</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/70732c9">1.21.1</a></strong> <date>(2023-09-26 02:13:22)</date></p>
+<ul>
+<li><changed title="Changed">improved percent display</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/4724d1e">1.21</a></strong> <date>(2023-09-25 03:56:50)</date></p>
+<ul>
+<li><added title="Added">added jsdocs</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/f6bb031">1.21</a></strong> <date>(2023-09-25 03:30:18)</date></p>
+<ul>
+<li><added title="Added">item highlighting with user selected score</added></li>
+<li><changed title="Changed">revamped settings</changed></li>
+<li><fixed title="Fixed">"$xx OFF" showed wrong discount</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/d75c7a1">1.20</a></strong> <date>(2023-09-24 16:32:49)</date></p>
+<ul>
+<li><changed title="Changed">changed API request format</changed></li>
+<li><changed title="Changed">settings classes are set on html element</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/6c2ddeb">1.19</a></strong> <date>(2023-09-24 05:16:10)</date></p>
+<ul>
+<li><added title="Added">block image trackers</added></li>
+<li><added title="Added">price difference/percent for "$xx off $yy"</added></li>
+<li><changed title="Changed">only show blocked messages in debug</changed></li>
+<li><changed title="Changed">API response changed to binary format</changed></li>
+<li><fixed title="Fixed">debug option unintentionally shown if no settings were prev. saved</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/4ce51c0">1.18.5</a></strong> <date>(2023-09-19 02:59:38)</date></p>
+<ul>
+<li><changed title="Changed">small optimizations</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/6398782">1.18.4</a></strong> <date>(2023-09-18 01:22:11)</date></p>
+<ul>
+<li><added title="Added">Prices tooltip</added></li>
+<li><fixed title="Fixed">Some cards were not properly displayed</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/654f09f">1.18.3</a></strong> <date>(2023-09-13 04:12:55)</date></p>
+<ul>
+<li><changed title="Changed">debug option shows if debug is set to 0 or 1</changed></li>
+<li><fixed title="Fixed">ad banner on top</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/3721e72">1.18.2</a></strong> <date>(2023-09-12 04:45:02)</date></p>
+<ul>
+<li><fixed title="Fixed">error on vote</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/a834ced">1.18.1</a></strong> <date>(2023-09-11 16:33:23)</date></p>
+<ul>
+<li><changed title="Changed">debug messages format</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/3a881d8">1.18</a></strong> <date>(2023-09-11 15:02:57)</date></p>
+<ul>
+<li><fixed title="Fixed">script sometimes fails initializing</fixed></li>
+<li><fixed title="Fixed">menu sometimes not shown</fixed></li>
+<li><changed title="Changed">simplified menu item creation</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/980fc16">1.17.4</a></strong> <date>(2023-09-11 12:21:00)</date></p>
+<ul>
+<li><changed title="Changed">ad blocking in fetch now responds with ""</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/48cb014">1.17.3</a></strong> <date>(2023-09-11 11:47:34)</date></p>
+<ul>
+<li><changed title="Changed">optimized proceedMarker usage</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/0d688a6">1.17.2</a></strong> <date>(2023-09-11 11:39:42)</date></p>
+<ul>
+<li><fixed title="Fixed">cache keys were added as class name</fixed></li>
+<li><changed title="Changed">processedMarker as single character</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/f63eda9">1.17.1</a></strong> <date>(2023-09-10 20:44:17)</date></p>
+<ul>
+<li><added title="Added">minor optimization</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/f3d787d">1.17</a></strong> <date>(2023-09-10 20:22:09)</date></p>
+<ul>
+<li><added title="Added">more comprehensive ad-blocker</added></li>
+<li><fixed title="Fixed">menu properly opens and closes</fixed></li>
+<li><fixed title="Fixed">dynamic links not resolved (i.e coupon links)</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/52b997d">1.16.3</a></strong> <date>(2023-09-08 16:44:44)</date></p>
+<ul>
+<li><added title="Added">added resolving links count to the loading icon</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/3f73a8a">1.16.2</a></strong> <date>(2023-09-05 18:21:46)</date></p>
+<ul>
+<li><fixed title="Fixed">fixed delay before menu appears</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/00de519">1.16.1</a></strong> <date>(2023-09-05 18:07:32)</date></p>
+<ul>
+<li><fixed title="Fixed">fixed loading icon in collapsed menu</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/4cc6a60">1.16</a></strong> <date>(2023-09-05 16:57:08)</date></p>
+<ul>
+<li><added title="Added">ad block option</added></li>
+<li><added title="Added">moved all options into dropdown menu</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/969c3c4">1.15.2</a></strong> <date>(2023-09-05 11:41:30)</date></p>
+<ul>
+<li><fixed title="Fixed">prices such as ~$123 were not recognized.</fixed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/7d335a6">1.15.1</a></strong> <date>(2023-09-05 02:12:31)</date></p>
+<ul>
+<li><added title="Added">moved css to the end</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/72c4a9b">1.15</a></strong> <date>(2023-09-05 01:53:02)</date></p>
+<ul>
+<li><added title="Added">hour glass icon displayed while links are being resolved.</added></li>
+<li><removed title="Removed">Removed "Show resolved" option.</removed></li>
+<li><changed title="Changed">Resolved links are green now</changed></li>
+<li><changed title="Changed">Links only resolved if  "Resolved links" option is enabled.</changed></li>
+<li><changed title="Changed">Overlay link icon only shown when resolved/original link is available</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/e03767a">1.14</a></strong> <date>(2023-09-04 20:01:48)</date></p>
+<ul>
+<li><added title="Added">API request to changed to POST</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/82b0a7b">1.13.1</a></strong> <date>(2023-09-04 00:45:57)</date></p>
+<ul>
+<li><added title="Added">Update README.md</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/b4a47d0">1.13.1</a></strong> <date>(2023-09-04 00:45:33)</date></p>
+<ul>
+<li><added title="Added">Create README.md</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/e838c5a">1.13.1</a></strong> <date>(2023-09-04 00:41:46)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/7542df7">1.13</a></strong> <date>(2023-09-04 00:19:14)</date></p>
+<ul>
+<li><added title="Added">added options checkboxes</added></li>
+<li><added title="Added">fixed some pages not parsed</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/be34cb1">1.12</a></strong> <date>(2023-09-03 05:50:15)</date></p>
+<ul>
+<li><added title="Added">title on original links</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/2dd07c3">1.12</a></strong> <date>(2023-09-03 05:47:37)</date></p>
+<ul>
+<li><added title="Added">wrapped price diff. was overlapping line below</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/bc8942a">1.11</a></strong> <date>(2023-09-03 05:17:21)</date></p>
+<ul>
+<li><added title="Added">added license</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/9cf7cdc">1.11</a></strong> <date>(2023-09-03 05:11:59)</date></p>
+<ul>
+<li><added title="Added">display price difference and %</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/e97085a">1.11</a></strong> <date>(2023-09-03 04:49:52)</date></p>
+<ul>
+<li><added title="Added">optimized script</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/b2b9f35">1.10</a></strong> <date>(2023-09-02 15:46:00)</date></p>
+<ul>
+<li><added title="Added">new</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/ff99192">1.9</a></strong> <date>(2021-11-23 23:09:51)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/acfd041">1.9</a></strong> <date>(2021-11-21 14:14:04)</date></p>
+<ul>
+<li><added title="Added">dark theme detection</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/d888b70">1.8</a></strong> <date>(2021-10-28 01:18:54)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/9ae42fb">1.7</a></strong> <date>(2020-09-28 03:39:23)</date></p>
+<ul>
+<li><added title="Added">original link as icon on mouse over a link</added></li>
+<li><changed title="Changed">links that are not yet resolved shown in red</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/18ed4d5">1.6.4</a></strong> <date>(2020-05-13 03:37:39)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/88d5972">1.6.3</a></strong> <date>(2020-05-11 12:32:26)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/ba9ffa2">1.6.2</a></strong> <date>(2020-05-11 01:27:10)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/205c570">1.6.1</a></strong> <date>(2020-05-10 23:37:39)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/c5b854a">1.6</a></strong> <date>(2020-05-10 23:05:32)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/07d9f6b">1.5.3</a></strong> <date>(2020-05-10 13:15:07)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/5dd0a4f">1.5.1</a></strong> <date>(2020-05-10 12:54:48)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/f41b04c">1.5</a></strong> <date>(2020-05-10 12:44:39)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/cbdf6e1">1.4</a></strong> <date>(2020-05-10 12:03:43)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/0ef2703">1.3</a></strong> <date>(2020-05-09 18:37:57)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/10b1509">1.2</a></strong> <date>(2020-05-09 15:52:52)</date></p>
