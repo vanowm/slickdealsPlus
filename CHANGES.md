@@ -1,8 +1,21 @@
-<style type="text/css">html
+<style type="text/css">:root,body
 {
-	max-width: 50em;
-	margin: auto;
+	padding: 0;
+	margin: 0;
+	border: 0;
+}
+:root
+{
 	position: relative;
+	font-family: "Segoe WPC", "Segoe UI", sans-serif;
+	padding: 32px;
+	font-size: 14px;
+}
+body
+{
+	margin: auto;
+	max-width: 60ch;
+	font-size: 16px;
 }
 fixed::before,
 changed::before,
@@ -75,39 +88,60 @@ h1:first-of-type
 {
 	margin-top: 0 !important;
 }
+
 details {
-	-webkit-user-select: none;
-	user-select: none;
-	font-size: 0.8em;
-	float: right;
-	line-height: 3em;
-	position: sticky;
-	margin-top: -3.0em;
-	margin-right: -0.8em;
-	top: 0.5em;
-	right: 0.5em;
-	opacity: 0.4;
-	transition: opacity 0.7s ease-in-out;
+	--menuX: 0.2em;
+	--menuY: 0.2em;
+    -webkit-user-select: none;
+    user-select: none;
+    font-size: 0.8em;
+    /* padding: 1em; */
+	line-height: 1em;
+    position: fixed;
+    top: calc(var(--menuY) + 1px);
+	right: calc(var(--menuX) + 0.5em + 0.5px);
+    opacity: 0.4;
+    z-index: 1;
+    overflow: hidden;
+	--transition: 0.2s ease-in-out;
+    transition: opacity var(--transition),
+				height var(--transition),
+				border var(--transition);
+}
+details[open],
+details:hover
+{
+	height: 3em;
+	opacity: 1;
+	background-color: var(--bgColor-default, var(--color-canvas-default));
 	z-index: 1;
+}
+
+details:not([open]) > *
+{
+	margin: 0;
+}
+
+details > *:last-child
+{
+	margin: 1em;
+    margin-top: 0;
 }
 
 details[open] {
-	background-color: var(--bgColor-default, var(--color-canvas-default));
+	top: var(--menuY);
+	right: var(--menuX);
+	height: 9em;
 	border: 1px solid var(--borderColor-muted, var(--color-border-muted));
-	padding: 1em;
-	margin-right: -2.2em;
-	right: 0.5em;
-	z-index: 1;
-	opacity: 1;
 }
 
-details[open]>summary {
+details[open] > summary {
 	line-height: 1em;
-	margin: 0.0em 0 1em;
 	text-align: center;
 }
 
 summary {
+	padding: 1em;
 	color: grey;
 }
 
@@ -123,7 +157,10 @@ details>div>*::before {
 
 # Changes Log
 
-**[23.10.7-190707](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-07 19:07:07)</date>
+**[23.10.8-010415](https://github.com/vanowm/slickdealsPlus/commit/)** <date>(2023-10-08 01:04:15)</date>
+* <changed title="Changed">updated changes log style format</changed>
+
+**[23.10.7-190707](https://github.com/vanowm/slickdealsPlus/commit/de3b6ba)** <date>(2023-10-07 19:07:07)</date>
 * <changed title="Changed">updated link to changes log</changed>
 
 **[23.10.7-160105](https://github.com/vanowm/slickdealsPlus/commit/09c9df2)** <date>(2023-10-07 16:01:05)</date>

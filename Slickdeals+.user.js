@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.7-190707
+// @version      23.10.8-010415
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,7 +17,7 @@ const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `* updated link to changes log`;
+const CHANGES = `* updated changes log style format`;
 
 /**
  * A function that reads and writes data to the browser's local storage.
