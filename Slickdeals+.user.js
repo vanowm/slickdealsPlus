@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.8-010415
+// @version      23.10.9-040014
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -17,7 +17,8 @@ const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `* updated changes log style format`;
+const CHANGES = `! css setting reset
+* stylelint happy`; //will be replace with current commit message
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -169,7 +170,7 @@ const SETTINGS = (() =>
 
 		if (!Object.prototype.hasOwnProperty.call(defaultSettings, id))
 			settings.delete(id);
-		else if (typeof settings.get(id) !== typeof defaultSettings[id].default)
+		else if (defaultSettings[id].default !== null && typeof settings.get(id) !== typeof defaultSettings[id].default)
 			settings.set(id, defaultSettings[id].default);
 	}
 
@@ -1656,8 +1657,9 @@ document.addEventListener("DOMContentLoaded", init, false);
 {
 	color: #00b309;
 }
-body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
+
 .dealDetailsOutclickButton[data-v-ID].resolved,
+body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
 .seeDealButton.resolved
 {
 	--buttonBackgroundColor: #0c9144;
@@ -1665,13 +1667,23 @@ body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
 	--dealDetailsOutclickButtonBgColorHover: #0b7b1d;
 	--dealDetailsOutclickButtonBgColorActive: #06551a;
 }
+
 .seeDealButton.resolved:hover
 {
 	--buttonBackgroundColor: #0b7b1d;
 }
+
 .seeDealButton.resolved:active
 {
 	--buttonBackgroundColor: #06551a;
+}
+
+li.highlightRating .dealCard[data-v-ID],
+div.highlightRating,
+li.highlightRating
+{
+	--backgroundColor: #E4FFDD;
+	--cardBackgroundColor: var(--backgroundColor);
 }
 
 li.free .dealCard[data-v-ID],
@@ -1680,6 +1692,24 @@ li.free
 {
 	--highlightColor: #FF5D6A;
 	--backgroundColor: #ffdde0;
+}
+
+li.highlightDiff .dealCard[data-v-ID],
+div.highlightDiff,
+li.highlightDiff
+{
+	--backgroundColor: #ffecdd;
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+div.free,
+li.free,
+div.highlightRating,
+li.highlightRating,
+div.highlightDiff,
+li.highlightDiff
+{
+	animation: pulse .5s infinite alternate;
 }
 
 body.darkMode li.free .dealCard[data-v-ID],
@@ -1691,15 +1721,6 @@ body.darkMode li.free
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-
-li.highlightRating .dealCard[data-v-ID],
-div.highlightRating,
-li.highlightRating
-{
-	--backgroundColor: #E4FFDD;
-	--cardBackgroundColor: var(--backgroundColor);
-}
-
 body.darkMode li.highlightRating .dealCard[data-v-ID],
 body.darkMode div.highlightRating,
 body.darkMode li.highlightRating
@@ -1708,13 +1729,6 @@ body.darkMode li.highlightRating
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-li.highlightDiff .dealCard[data-v-ID],
-div.highlightDiff,
-li.highlightDiff
-{
-	--backgroundColor: #ffecdd;
-	--cardBackgroundColor: var(--backgroundColor);
-}
 body.darkMode li.highlightDiff .dealCard[data-v-ID],
 body.darkMode div.highlightDiff,
 body.darkMode li.highlightDiff
@@ -1722,6 +1736,7 @@ body.darkMode li.highlightDiff
 	--backgroundColor: #321c38;
 	--cardBackgroundColor: var(--backgroundColor);
 }
+
 /* search results */
 .resultRow.free,
 .resultRow.highlightDiff,
@@ -1730,25 +1745,19 @@ body.darkMode li.highlightDiff
 	background-color: var(--backgroundColor);
 }
 
+.dealDetailsPriceInfo[data-deal-diff],
 .resultRow.free
 {
 	position: relative; /* allow box-shadow overlap item below */
 }
+
 /* end search results */
 
-div.free,
-li.free,
-div.highlightRating,
-li.highlightRating,
-div.highlightDiff,
-li.highlightDiff
-{
-	animation: pulse .5s infinite alternate;
-}
+
 @keyframes pulse
 {
-	from { box-shadow: 0 0 1em var(--highlightColor);}
-	to {box-shadow: 0 0 0.5em var(--highlightColor);}
+	from{ box-shadow: 0 0 1em var(--highlightColor); }
+	to{ box-shadow: 0 0 0.5em var(--highlightColor); }
 }
 
 #fpMainContent .gridCategory .fpGridBox.list.free,
@@ -1766,32 +1775,32 @@ li.highlightDiff
 
 #fpMainContent .gridCategory ul.gridDeals .fpGridBox .itemInfoLine .avatarBox
 {
-	float: right;
 	position: initial;
+	float: right;
 }
 
 #fpMainContent .gridCategory ul.gridDeals .fpGridBox .fpItem .itemBottomRow .comments
 {
-	display: initial !important;
 	position: absolute;
 	right: -2.5em;
 	bottom: 5em;
+	display: initial !important;
 }
 
 a.overlayUrl
 {
 	position: relative;
-	height: 1em;
 	display: none;
+	height: 1em;
 }
 
 a.overlayUrl::before,
 a.overlayUrl::after
 {
-	content: "";
 	position: absolute;
-	height: 1.3em;
 	top: -0.1em;
+	height: 1.3em;
+	content: "";
 
 }
 
@@ -1802,20 +1811,20 @@ a.overlayUrl::after
 
 a.overlayUrl::before
 {
+	left: .1em;
 	width: 1.3em;
+	padding: 0.5em 1em;
 	border-radius: 0.5em;
 	background-color: #ffffff9f;
 	background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9ImN1cnJlbnRDb2xvciIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pbllNaW4gbWVldCIgdmlld0JveD0iMCAwIDEwIDExIj4KICA8cGF0aCBmaWxsPSJpbmhlcml0IiBkPSJtOC40NjUuNTQ2Ljk5Ljk5YTEuODcgMS44NyAwIDAgMS0uMDAyIDIuNjRsLTEuMzIgMS4zMmExLjQxMiAxLjQxMiAwIDAgMS0xLjUyNS4zMDMuNDY3LjQ2NyAwIDAgMSAuMzU3LS44NjJjLjE3NC4wNy4zNzQuMDMuNTA5LS4xMDJsMS4zMjEtMS4zMTdhLjkzMy45MzMgMCAwIDAgMC0xLjMybC0uOTktLjk5YS45MzMuOTMzIDAgMCAwLTEuMzIgMGwtMS4zMiAxLjMyYS40NjcuNDY3IDAgMCAwLS4xLjUwNi40NjcuNDY3IDAgMSAxLS44NjMuMzU3IDEuNDAzIDEuNDAzIDAgMCAxIC4zMDMtMS41MjZsMS4zMi0xLjMyYTEuODcgMS44NyAwIDAgMSAyLjY0IDBaIi8+CiAgPHBhdGggZmlsbD0iaW5oZXJpdCIgZD0iTTMuMDIgNi45OGEuNDcuNDcgMCAwIDAgLjY2IDBsMy42My0zLjYzYS40NjcuNDY3IDAgMCAwLS42Ni0uNjZMMy4wMiA2LjMyYS40NjcuNDY3IDAgMCAwIDAgLjY2WiIvPgogIDxwYXRoIGZpbGw9ImluaGVyaXQiIGQ9Ik01LjE5IDYuMzU3YS40NjcuNDY3IDAgMCAwLS4yNTMuNjEuNDY3LjQ2NyAwIDAgMS0uMTAyLjUwOGwtMS4zMiAxLjMyYS45MzMuOTMzIDAgMCAxLTEuMzIgMGwtLjk5LS45OWEuOTMzLjkzMyAwIDAgMSAwLTEuMzJsMS4zMjItMS4zMmEuNDczLjQ3MyAwIDAgMSAuNTEtLjEuNDY3LjQ2NyAwIDAgMCAuMzU1LS44NjQgMS40MTYgMS40MTYgMCAwIDAtMS41MjUuMzA1TC41NDYgNS44MjZhMS44NyAxLjg3IDAgMCAwIDAgMi42NGwuOTkuOTljLjcyOS43MjggMS45MS43MjggMi42NCAwbDEuMzItMS4zMmMuNC0uNDAxLjUyLTEuMDAzLjMwMy0xLjUyN2EuNDY3LjQ2NyAwIDAgMC0uNjEtLjI1MloiLz4KPC9zdmc+");
 	background-position: center;
 	background-repeat: no-repeat;
-	padding: 0.5em 1em;
-	left: .1em;
 	opacity: 0.5;
 }
 
 a.overlayUrl:hover::before
 {
-	background-color: #ffffff;
+	background-color: #fff;
 	opacity: 1;
 }
 
@@ -1830,10 +1839,41 @@ a:hover > a.overlayUrl
 	display: none !important;
 }
 
+.sdp-menu li
+{
+	white-space: nowrap;
+}
+
+#sdpChanges,
+.sdp-menu .changes,
 html.freeOnly .frontpageRecommendationCarousel li:not(.free),
 html.freeOnly .dealTiles li:not(.free),
 html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
-html.freeOnly .frontpageGrid li:not(.free)
+html.freeOnly .frontpageGrid li:not(.free),
+html.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff),
+html.diffOnly .dealTiles li:not(.highlightDiff),
+html.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
+html.diffOnly .frontpageGrid li:not(.highlightDiff),
+html.ratingOnly .frontpageRecommendationCarousel li:not(.highlightRating),
+html.ratingOnly .dealTiles li:not(.highlightRating),
+html.ratingOnly .bp-p-categoryPage_main li:not(.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly .frontpageGrid li:not(.highlightRating),
+html.freeOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.free),
+html.freeOnly.diffOnly .dealTiles li:not(.highlightDiff,.free),
+html.freeOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.free),
+html.freeOnly.ratingOnly .frontpageRecommendationCarousel li:not(.highlightRating,.free),
+html.freeOnly.ratingOnly .dealTiles li:not(.highlightRating,.free),
+html.freeOnly.ratingOnly .bp-p-categoryPage_main li:not(.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly .frontpageGrid li:not(.highlightRating,.free),
+html.ratingOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating),
+html.ratingOnly.diffOnly .dealTiles li:not(.highlightDiff,.highlightRating),
+html.ratingOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highlightRating),
+html.freeOnly.ratingOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating,.free),
+html.freeOnly.ratingOnly.diffOnly .dealTiles li:not(.highlightDiff,.highlightRating,.free),
+html.freeOnly.ratingOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highlightRating,.free)
 {
 	display: none;
 }
@@ -1842,23 +1882,24 @@ html.freeOnly .frontpageGrid li:not(.free)
 
 .sdp-menu .slickdealsHeaderDropdownItem
 {
-	cursor: pointer;
 	color: var(--hamburgerTextColor);
+	cursor: pointer;
 }
 
 .sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID]
 {
 	column-gap: 4px;
 }
+
 .sdp-menu .slickdealsHeaderDropdownItem > a::before
 {
-	content: "☐";
 	display: inline-block;
 	width: 1em;
 	height: 1em;
-	line-height: 1em;
-	font-size: 1.3em;
 	margin: 0 0.1em;
+	content: "☐";
+	font-size: 1.3em;
+	line-height: 1em;
 }
 
 /* end setting checkbox */
@@ -1874,43 +1915,34 @@ html.freeOnly .frontpageGrid li:not(.free)
 	row-gap: 0;
 }
 
-.sdp-menu li
-{
-	white-space: nowrap;
-}
 .sdp-menu textarea
 {
-	background-color: transparent;
 	width: 100%;
 	height: 5em;
+	background-color: transparent;
 }
+
 .sdp-menu .footer
 {
-	text-align: right;
 	opacity: 0.5;
+	text-align: right;
 }
+
 .sdp-menu .footer::before
 {
 	content: attr(data-label);
-	text-align: right;
-	opacity: 0.5;
 	cursor: pointer;
-}
-#sdpChanges
-{
-	display: none;
-}
-.sdp-menu .changes
-{
-	display: none;
+	opacity: 0.5;
+	text-align: right;
 }
 
 .changesLink
 {
 	display: block;
-	text-align: right;
 	font-size: 0.8em;
+	text-align: right;
 }
+
 #sdpChanges:checked ~ .changes
 {
 	display: block;
@@ -1918,28 +1950,36 @@ html.freeOnly .frontpageGrid li:not(.free)
 	text-align: left;
 	white-space: pre-wrap;
 }
+
 .sdp-menu ul[data-v-ID] .slickdealsHeaderDropdownItem.input
 {
 	padding: 0.35em 0.8em;
 }
+
 .sdp-menu li > input
 {
-	border: 1px solid;
-	border-radius: 3px;
-	padding: revert;
-	margin: revert;
+	display: inline-block;
 	width: 5em;
 	height: 2em;
-	line-height: 2em;
-	display: inline-block;
-	color: inherit;
+	padding: revert;
+	border: 1px solid;
+	border-radius: 3px;
+	margin: revert;
 	background-color: inherit;
+	color: inherit;
+	line-height: 2em;
+}
+
+.dealCard__priceContainer > span:last-of-type
+{
+	margin-right: 4px;
 }
 
 .sdp-menu li > span:first-child
 {
 	margin-right: 0.6em;
 }
+
 .sdp-menu li > span:last-child
 {
 	margin-left: 0.6em;
@@ -1960,95 +2000,104 @@ html[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 /* update popup */
 html.updated .sdp-updated
 {
-	background-color: darkred;
-	width: 100%;
-	height: 1.5rem;
+	position: fixed;
+	z-index: 9999;
 	top: 0;
 	left: 0;
-	z-index: 9999;
-	position: fixed;
-	text-align: center;
-	line-height: 1.5rem;
-	font-size: 1rem;
-	color: white;
+	width: 100%;
+	height: 1.5rem;
 	animation: shrink 60s ease 600s forwards;
+	background-color: darkred;
+	color: white;
 	cursor: pointer;
+	font-size: 1rem;
+	line-height: 1.5rem;
+	text-align: center;
 }
 
-@keyframes shrink {
-	90% {
+@keyframes shrink
+{
+	90%
+{
 		font-size: 0.5rem;
 		opacity: 1;
 	}
+
 	100%
 	{
+		display: none;
 		font-size: 0;
 		opacity: 0;
-		display: none;
 	}
 }
+
 /* end update popup */
 
-@media (min-width: 1024px)
+@media (width >= 1024px)
 {
 	html[data-loading] .sdp-menu
 	{
 		position: relative;
 	}
+
 	html[data-loading] .sdp-menu::before
 	{
-		content: "⌛";
 		right: 0.1em;
-		line-height: 2.5em;
 		animation: spin 1s linear infinite;
+		content: "⌛";
+		line-height: 2.5em;
 	}
+
 	html[data-loading] .sdp-menu::after
 	{
-		content: attr(data-loading);
-		text-align: center;
-		width: 1em;
-		line-height: 1em;
 		top: 0.8em;
 		right: 0.1em;
+		width: 1em;
 		color: black;
+		content: attr(data-loading);
+		line-height: 1em;
+		text-align: center;
 		text-shadow: 1px 0 0 #fff,
 			0 1px 0 #fff,
 			-1px 0 0 #fff,
 			0 -1px 0 #fff,
 			0 0 0 #fff;
-	
+
 	}
+
 	.sdp-menu .slickdealsHeaderDropdownItem
 	{
 		color: var(--dropdownTextColor);
 	}
-	
+
 }
 
-@media (max-width: 1023px)
+@media (width <= 1023px)
 {
 	html[data-loading] .sdp-menu .slickdealsHeader__navItemText
 	{
 		position: relative;
 		overflow: unset !important;
 	}
+
 	html[data-loading] .sdp-menu .slickdealsHeader__navItemText::before
 	{
-		content: "⌛";
 		right: -1.5em;
-		line-height: 2.0em;
 		animation: spin 1s linear infinite;
+		content: "⌛";
+		line-height: 2.0em;
 	}
+
 	html[data-loading] .sdp-menu .slickdealsHeader__navItemText::after
 	{
-		content: attr(data-loading);
-		text-align: center;
-		width: 1em;
-		height: 1em;
-		line-height: 1em;
 		top: 0.5em;
 		right: -1.5em;
+		width: 1em;
+		height: 1em;
 		color: black;
+		content: attr(data-loading);
+		line-height: 1em;
+		text-align: center;
 		text-shadow: 1px 0 0 #fff,
 			0 1px 0 #fff,
 			-1px 0 0 #fff,
@@ -2057,8 +2106,10 @@ html.updated .sdp-updated
 	}
 }
 
-@keyframes spin {
-	100% {
+@keyframes spin
+{
+	100%
+ 	{
 		transform: rotate(360deg);
 	}
 }
@@ -2067,26 +2118,17 @@ html.updated .sdp-updated
 {
 	display: flex;
 	overflow: hidden;
-	flex-wrap: wrap;
 	height: min-content;
-}
-.dealCard__priceContainer > span:last-of-type
-{
-	margin-right: 4px;
+	flex-wrap: wrap;
 }
 
-.dealDetailsPriceInfo[data-deal-diff]
+.cardPriceInfo /* added price wrapper for https://slickdeals.net/deals/*** */
 {
-	position: relative;
-}
-
-.cardPriceInfo /* added price wrapper for https://slickdeals.net/deals/*** */ 
-{
-	grid-area: price;
 	display: inline-flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: inherit;
+	grid-area: price;
 }
 
 html.showDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
@@ -2095,17 +2137,21 @@ html.showDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/d
 html.showDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
 html.showDiff a[data-deal-diff]::after /* deal list page */
 {
+	width: 100%; /* force on new line */
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
-	width: 100%; /* force on new line */
 }
 
-@media (min-width: 768px) {
-	.dealCard__content[data-v-ID] {
+@media (width >= 768px)
+{
+	.dealCard__content[data-v-ID]
+ 	{
 		grid-template-rows:auto 67px auto 1fr 20px;
 	}
 }
-.pageContent--reserveAnnouncementBar { /* top banner */
+
+.pageContent--reserveAnnouncementBar
+{ /* top banner */
 	padding-top: 0 !important;
 }`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
