@@ -1,53 +1,3 @@
-<style type="text/css">:root
-{
-    --color-accent-fg: #2f81f7;
-    --color-border-muted: #21262d;
-    --color-canvas-default: #0d1117;
-
-    font-size: 12.3px;
-}
-
-a
-{
-    background-color: transparent;
-    color: var(--fgColor-accent, var(--color-accent-fg));
-    text-decoration: none;
-}
-
-a:hover
-{
-    text-decoration: underline;
-}
-
-h1
-{
-    padding-bottom: 0.3em;
-    border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));
-    margin: 0.67em 0;
-    font-size: 2em;
-    font-weight: var(--base-text-weight-semibold, 600);
-    line-height: 1.25;
-}
-
-summary
-{
-    cursor: pointer;
-}
-
-strong
-{
-    font-weight: var(--base-text-weight-semibold, 600);
-}
-
-@media (prefers-color-scheme: dark)
-{
-    body
-    {
-        background: var(--color-canvas-default);
-        color: #e6edf3;
-    }
-}
-</style>
 <style type="text/css">:root,body
 {
     padding: 0;
@@ -168,16 +118,26 @@ summary
     color: grey;
 }
 
+.legend
+{
+    position: sticky;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    margin-top: -2.3em;
+    margin-right: 0;
+    float: right;
+}
+
 details
 {
-    --menuX: 0.2em;
-    --menuY: 0.2em;
-
-    position: fixed;
-    z-index: 1;
-    top: calc(var(--menuY) + 1px);
-    right: calc(var(--menuX) + 0.5em + 0.5px);
+    position: absolute;
+    top: 0.2em;
+    right: 0.2em;
     overflow: hidden;
+    width: 7.5em;
+    margin-top: 1px;
+    margin-right: 1px;
     font-size: 0.8em;
 
     /* padding: 1em; */
@@ -214,15 +174,14 @@ details > *:last-child
 
 details[open]
 {
-    top: var(--menuY);
-    right: var(--menuX);
     height: 9em;
     border: 1px solid var(--borderColor-muted, var(--color-border-muted));
+    margin-top: 0;
+    margin-right: 0;
 }
 
-details[open] > summary
+details > summary
 {
-    line-height: 1em;
     text-align: center;
 }
 
@@ -236,9 +195,22 @@ details>div>*::before
     margin-left: 0;
 }
 </style>
-<p><details><summary>Legend</summary><div><added></added>Added<br><changed></changed>Changed<br><fixed></fixed>Fixed<br><removed></removed>Removed</div></details></p>
+<div class="legend"><details><summary>Legend</summary><div><added></added>Added<br><changed></changed>Changed<br><fixed></fixed>Fixed<br><removed></removed>Removed</div></details></div>
 <h1 id="changeslog">Changes Log</h1>
-<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/">23.10.9-040014</a></strong> <date>(2023-10-09 04:00:14)</date></p>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/">23.10.18-084342</a></strong> <date>(2023-10-18 08:45:24)</date></p>
+<ul>
+<li><fixed title="Fixed">only resolve slickdeals.net urls</fixed></li>
+<li><changed title="Changed">moved changes log legend closer to center</changed></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/c242eef">23.10.9-040014</a></strong> <date>(2023-10-17 02:22:43)</date></p>
+<ul>
+<li><added title="Added">Update CNAME</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/d699c4e">23.10.9-040014</a></strong> <date>(2023-10-15 20:49:45)</date></p>
+<ul>
+<li><added title="Added">Create CNAME</added></li>
+</ul>
+<p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/2b51849">23.10.9-040014</a></strong> <date>(2023-10-09 04:00:14)</date></p>
 <ul>
 <li><fixed title="Fixed">css setting reset</fixed></li>
 <li><changed title="Changed">stylelint happy</changed></li>
@@ -463,3 +435,66 @@ details>div>*::before
 <p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/cbdf6e1">1.4</a></strong> <date>(2020-05-10 12:03:43)</date></p>
 <p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/0ef2703">1.3</a></strong> <date>(2020-05-09 18:37:57)</date></p>
 <p><strong><a href="https://github.com/vanowm/slickdealsPlus/commit/10b1509">1.2</a></strong> <date>(2020-05-09 15:52:52)</date></p>
+<style type="text/css">:root
+{
+    --color-accent-fg: #2f81f7;
+    --color-border-muted: #21262d;
+    --color-canvas-default: #0d1117;
+    --color-neutral-muted: rgb(110 118 129 / 40%);
+
+    font-size: 12.3px;
+}
+
+a
+{
+    background-color: transparent;
+    color: var(--fgColor-accent, var(--color-accent-fg));
+    text-decoration: none;
+}
+
+a:hover
+{
+    text-decoration: underline;
+}
+
+h1
+{
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--borderColor-muted, var(--color-border-muted));
+    margin: 0.67em 0;
+    font-size: 2em;
+    font-weight: var(--base-text-weight-semibold, 600);
+    line-height: 1.25;
+}
+
+summary
+{
+    cursor: pointer;
+}
+
+strong
+{
+    font-weight: var(--base-text-weight-semibold, 600);
+}
+
+code
+{
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+    margin: 0;
+    background-color: var(--bgColor-neutral-muted, var(--color-neutral-muted));
+    font-family: ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    font-size: 85%;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+@media (prefers-color-scheme: dark)
+{
+    body
+    {
+        background: var(--color-canvas-default);
+        color: #e6edf3;
+    }
+}
+</style>

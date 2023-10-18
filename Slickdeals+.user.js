@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.9-040014
+// @version      23.10.18-084342
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,12 +13,12 @@
 {
 "use strict";
 
+const CHANGES = `! only resolve slickdeals.net urls
+* moved changes log legend closer to center`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
 const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-const CHANGES = `! css setting reset
-* stylelint happy`; //will be replace with current commit message
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -1335,6 +1335,9 @@ const getUrlInfo = (() =>
 	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
 	return url =>
 	{
+		if (new URL(url).hostname !== "slickdeals.net")
+			return false;
+
 		let type;
 		let id;
 		for (let i = 0; i < ids.length; i++)
