@@ -10,8 +10,12 @@ Features:
 * Ad-blocking
 * Display price and percent difference between original and sale prices
 * Highlight items based on the score
+* Highlight items based on price difference
 * Highlight free items
 * Show only free items
+* Customizable highlight colors
 * Resolve links (it sends a URL to a 3rd party service which returns final destination of that URL)
+
+![image](https://github.com/vanowm/slickdealsPlus/assets/511517/328a7870-9e85-4e24-8fd4-ca3c328c248a)
 
 [Changes](https://vanowm.github.io/slickdealsPlus/CHANGES.html)

@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements
 // @match        https://slickdeals.net/*
-// @version      23.10.19-032152
+// @version      23.10.22-161849
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,7 +13,11 @@
 {
 "use strict";
 
-const CHANGES = `# greasyfork webhook test`;
+const CHANGES = `+ customizable highlight colors
++ license
+* renamed "No ads" to "Block ads"
+* version num is now the date when source was modified, not commit date
+* updated readme`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -36,6 +40,7 @@ const SETTINGS = (() =>
 		localStorage.setItem(LocalStorageName, oldData);
 		localStorage.removeItem("linksCache");
 	}
+	const sColor = "Background color";
 	const defaultSettings = {
 		freeOnly: { /* show free only */
 			default: 0,
@@ -50,7 +55,7 @@ const SETTINGS = (() =>
 		},
 		noAds: { /* remove ads */
 			default: 1,
-			name: "No ads",
+			name: "Block ads",
 			description: "Block ads (require page reload)",
 		},
 		debug: { /* debug mode: 0 = off, 1 = on, 2 = off and hide menu */
@@ -69,10 +74,28 @@ const SETTINGS = (() =>
 		css: {
 			// eslint-disable-next-line unicorn/no-null
 			default: null, // null = hidden
-			type: "text",
+			type: "textarea",
 			name: "Custom CSS",
 			description: "Add custom CSS to the page",
 			onChange: () => customCSS()
+		},
+		colorFreeBG: {
+			default: "",
+			type: "color",
+			description: sColor,
+			onChange: () => setColors()
+		},
+		colorRatingBG: {
+			default: "",
+			type: "color",
+			description: sColor,
+			onChange: () => setColors()
+		},
+		colorDiffBG: {
+			default: "",
+			type: "color",
+			description: sColor,
+			onChange: () => setColors()
 		},
 		showDiff: {
 			default: 1,
@@ -1381,9 +1404,10 @@ const initMenu = elNav =>
 		const description = SETTINGS.$description[id];
 		const elStyle = document.createElement("style");
 		const types = {
-			string : "input",
+			text : "input",
+			color : "input",
 			number : "input",
-			text : "textarea",
+			textarea : "textarea",
 			checkbox : "a",
 			radio : "a"
 		};
@@ -1392,57 +1416,116 @@ const initMenu = elNav =>
 		let elLabelBefore;
 		let elLabelAfter;
 		const events = {};
-		if (type === "number")
+		switch (type)
 		{
+			case "number": {
 			//only allow positive round numbers
-			events.keypress = evt =>
-			{
-				if (evt.charCode < 48 || evt.charCode > 57)
+				events.keypress = evt =>
 				{
-					evt.preventDefault();
-					evt.stopPropagation();
+					if (evt.charCode < 48 || evt.charCode > 57)
+					{
+						evt.preventDefault();
+						evt.stopPropagation();
+					}
+				};
+				events.input = () => SETTINGS(id, ~~elSetting.value);
+				elSetting.type = "number";
+				elSetting.min = SETTINGS.$min[id] || 0;
+				if (SETTINGS.$max[id] !== undefined)
+				{
+					elSetting.max = SETTINGS.$max[id];
+					const length_ = ("" + elSetting.max).length;
+					elSetting.style.width = (length_ * 2) + "ch";
 				}
-			};
-			events.input = () => SETTINGS(id, ~~elSetting.value);
-			elSetting.type = "number";
-			elSetting.min = SETTINGS.$min[id] || 0;
-			if (SETTINGS.$max[id] !== undefined)
-			{
-				elSetting.max = SETTINGS.$max[id];
-				const length_ = ("" + elSetting.max).length;
-				elSetting.style.width = (length_ * 2) + "ch";
+
+				elSetting.step = 1;
+				elLabelBefore = document.createElement("span");
+				elLabelBefore.textContent = label;
+				elLi.classList.add("input");
+
+				break;
 			}
+			case "text": {
+				elSetting.type = "text";
+				elLabelBefore = document.createElement("span");
+				elLabelBefore.textContent = label;
+				elLi.classList.add("input");
+				let timer;
+				events.input = () =>
+				{
+					clearTimeout(timer);
+					timer = setTimeout(() => SETTINGS(id, elSetting.value.trim()), 500);
+				};
 
-			elSetting.step = 1;
-			elLabelBefore = document.createElement("span");
-			elLabelBefore.textContent = label;
-			elLi.classList.add("input");
-		}
-		else if (type === "text")
-		{
-			elSetting.setAttribute("autocorrect", "false");
-			elSetting.setAttribute("spellcheck", "false");
-
-			elLabelBefore = document.createElement("div");
-			elLabelBefore.textContent = label;
-			elSetting.value = SETTINGS(id);
-			events.input = () => SETTINGS(id, elSetting.value);
-		}
-		else //checkboxes
-		{
-			events.click = () => SETTINGS(id, ~~!SETTINGS(id));
-			events.keypress = evt =>
-			{
-				if (evt.key === " " || evt.key === "Enter")
+				break;
+			}
+			case "color": {
+				// elSetting.type = "color";
+				if (label)
+				{
+					elLabelBefore = document.createElement("span");
+					elLabelBefore.textContent = label;
+				}
+				elLi.classList.add("input");
+				elLabelAfter = document.createElement("label");
+				elLabelAfter.setAttribute("for", id);
+				elLabelAfter.classList.add("reset");
+				elLabelAfter.title = "Reset to default";
+				const resetHide = state => elLabelAfter.classList.toggle("hidden", state);
+				events.reset = evt =>
 				{
 					evt.preventDefault();
 					evt.stopPropagation();
-					SETTINGS(id, ~~!SETTINGS(id));
-				}
-			};
-			elSetting.textContent = label;
-			elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
-			elSetting.classList.add("slickdealsHeaderDropdownItem__link");
+					if (evt.isTrusted)
+						SETTINGS(id, "");
+
+					elSetting.value = setColors.get(id);
+					elSetting.type = "color";
+					elSetting.dataset.default = elSetting.value;
+					resetHide(SETTINGS(id) === "");
+				};
+				elLabelAfter.addEventListener("click", events.reset);
+				let timer;
+				events.input = () =>
+				{
+					clearTimeout(timer);
+					let value = elSetting.value.trim();
+					if (elSetting.dataset.default === value)
+						value = "";
+
+					resetHide(value === "");
+
+					timer = setTimeout(() => SETTINGS(id, value), 500);
+				};
+				resetHide(SETTINGS(id) === "");
+				break;
+			}
+			case "textarea": {
+				elSetting.setAttribute("autocorrect", "false");
+				elSetting.setAttribute("spellcheck", "false");
+
+				elLabelBefore = document.createElement("div");
+				elLabelBefore.textContent = label;
+				elSetting.value = SETTINGS(id);
+				events.input = () => SETTINGS(id, elSetting.value.trim());
+
+				break;
+			}
+			default: { //checkbox
+				events.click = () => SETTINGS(id, ~~!SETTINGS(id));
+				events.keypress = evt =>
+				{
+					if (evt.key === " " || evt.key === "Enter")
+					{
+						evt.preventDefault();
+						evt.stopPropagation();
+						SETTINGS(id, ~~!SETTINGS(id));
+					}
+				};
+				elSetting.textContent = label;
+				elStyle.textContent = `html.${id} #${id}::before{content:"☑";}`;
+				elSetting.classList.add("slickdealsHeaderDropdownItem__link");
+			}
 		}
 		options = Object.assign({events}, options);
 
@@ -1481,7 +1564,8 @@ const initMenu = elNav =>
 
 		document.head.append(elStyle);
 		return elLi;
-	};
+	};//createMenuItem
+
 	const elMenu = elNav.lastElementChild.cloneNode(true);
 	initMenu.elMenu = elMenu;
 	initMenu.elHeader = elNav;
@@ -1530,7 +1614,9 @@ const initMenu = elNav =>
 	elLiDefault.innerHTML = "";
 	elNav.append(elMenu);
 
-	elUl.append(createMenuItem("freeOnly"));
+	const elFreeOnly = createMenuItem("freeOnly");
+	elFreeOnly.append(createMenuItem("colorFreeBG"));
+	elUl.append(elFreeOnly);
 	const elMenuItem = createMenuItem("resolveLinks");
 	if (loading)
 	{
@@ -1539,8 +1625,12 @@ const initMenu = elNav =>
 	}
 	elUl.append(elMenuItem);
 	elUl.append(createMenuItem("showDiff"));
-	elUl.append(createMenuItem("highlightDiff", {labelAfter: "%"}));
-	elUl.append(createMenuItem("highlightRating"));
+	const elHighlightDiff = createMenuItem("highlightDiff", {labelAfter: "%"});
+	elHighlightDiff.append(createMenuItem("colorDiffBG"));
+	elUl.append(elHighlightDiff);
+	const elHighlightRating = createMenuItem("highlightRating");
+	elHighlightRating.append(createMenuItem("colorRatingBG"));
+	elUl.append(elHighlightRating);
 	elUl.append(createMenuItem("noAds"));
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
@@ -1562,13 +1652,13 @@ const initMenu = elNav =>
 					if (evt.key !== "Tab")
 						return;
 
-					const el = evt.target;
+					const target = evt.target;
 					evt.preventDefault();
-					let start = el.selectionStart;
-					const end = el.selectionEnd;
-					el.value = el.value.slice(0, start)	+ "\t" + el.value.slice(end);
-					el.selectionStart = ++start;
-					el.selectionEnd = start;
+					let start = target.selectionStart;
+					const end = target.selectionEnd;
+					target.value = target.value.slice(0, start)	+ "\t" + target.value.slice(end);
+					target.selectionStart = ++start;
+					target.selectionEnd = start;
 				}
 			}
 		}));
@@ -1596,6 +1686,14 @@ const initMenu = elNav =>
 
 	elChanges.append(elChangesLink);
 	elUl.append(elFooterCheckbox, elFooter, elChanges);
+	if (document.readyState === "complete")
+		setColors.update();
+	else
+		document.addEventListener("readystatechange", () =>
+		{
+			if (document.readyState === "complete")
+				setColors.update();
+		}, false);
 };
 initMenu.counter = 1000;
 
@@ -1605,15 +1703,51 @@ initMenu.counter = 1000;
  * @function
  * @returns {void}
  */
-const customCSS = () =>
+const customCSS = (elStyle => () =>
 {
-	if (!customCSS.css)
+	elStyle.textContent = SETTINGS.css;
+	document.body.append(elStyle);
+})(document.createElement("style"));
+
+const setColors = (ids =>
+{
+	const elHidden = document.createElement("div");
+	elHidden.style.display = "none";
+	for(let i = 0; i < ids.length; i++)
 	{
-		customCSS.css = document.createElement("style");
+		const elColor = document.createElement("div");
+		elColor.className = ids[i];
+		elHidden.append(elColor);
 	}
-	customCSS.css.textContent = SETTINGS.css;
-	document.body.append(customCSS.css);
-};
+	document.addEventListener("DOMContentLoaded", () => document.body.append(elHidden), false);
+	return Object.assign(() =>
+	{
+		for(let i = 0; i < ids.length; i++)
+		{
+			const id = ids[i];
+			const value = SETTINGS(id);
+			if (value === "" || value === undefined)
+				document.body.style.removeProperty("--" + id);
+			else
+				document.body.style.setProperty("--" + id, value);
+
+		}
+	},
+	{
+		get: id => getComputedStyle(elHidden.querySelector("." + id))
+			.getPropertyValue("--backgroundColor"),
+
+		update: () =>
+		{
+			for(let i = 0; i < ids.length; i++)
+			{
+				const id = ids[i];
+				//only trusted reset event triggers the reset, otherwise it simply updates the color
+				$$(id).dispatchEvent(new Event("reset"));
+			}
+		},
+	});
+})(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
 /**
  * The main function that initializes the Slickdeals+ script.
@@ -1651,6 +1785,7 @@ const init = () =>
 		processLinks(elPageContent);
 	}
 	customCSS();
+	setColors();
 	debug(GM_info.script.name, "v" + VERSION, "initialized");
 };//init()
 
@@ -1680,63 +1815,71 @@ body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
 	--buttonBackgroundColor: #06551a;
 }
 
+.colorRatingBG,
 li.highlightRating .dealCard[data-v-ID],
 div.highlightRating,
 li.highlightRating
 {
-	--backgroundColor: #E4FFDD;
+	--backgroundColor: var(--colorRatingBG, #E4FFDD);
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
+.colorFreeBG,
 li.free .dealCard[data-v-ID],
 div.free,
 li.free
 {
-	--highlightColor: #FF5D6A;
-	--backgroundColor: #ffdde0;
+	--backgroundColor: var(--colorFreeBG, #ffdde0);
+	--highlightColor: var(--colorFreeBG, #FF5D6A);
 }
 
+.colorDiffBG,
 li.highlightDiff .dealCard[data-v-ID],
 div.highlightDiff,
 li.highlightDiff
 {
-	--backgroundColor: #ffecdd;
+	--backgroundColor: var(--colorDiffBG, #ddefff);
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
 div.free,
-li.free,
+li.free:not(.input),
 div.highlightRating,
-li.highlightRating,
+li.highlightRating:not(.input),
 div.highlightDiff,
-li.highlightDiff
+li.highlightDiff:not(.input)
 {
 	animation: pulse .5s infinite alternate;
 }
 
+body.darkMode .colorFreeBG,
 body.darkMode li.free .dealCard[data-v-ID],
 body.darkMode div.free,
 body.darkMode li.free
 {
-	--highlightColor: #A11E1C;
-	--backgroundColor: #443534;
+	--backgroundColor: var(--colorFreeBG, #443534);
+	--highlightColor: var(--backgroundColor, #A11E1C);
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
+body.darkMode .colorRatingBG,
 body.darkMode li.highlightRating .dealCard[data-v-ID],
 body.darkMode div.highlightRating,
 body.darkMode li.highlightRating
 {
-	--backgroundColor: #222C21;
+	--backgroundColor: var(--colorRatingBG, #222C21);
 	--cardBackgroundColor: var(--backgroundColor);
+	--highlightColor: var(--backgroundColor, #bbfab5);
 }
 
+body.darkMode .colorDiffBG,
 body.darkMode li.highlightDiff .dealCard[data-v-ID],
 body.darkMode div.highlightDiff,
 body.darkMode li.highlightDiff
 {
-	--backgroundColor: #321c38;
+	--backgroundColor: var(--colorDiffBG, #321c38);
 	--cardBackgroundColor: var(--backgroundColor);
+	--highlightColor: var(--backgroundColor, #d877f3);
 }
 
 /* search results */
@@ -1754,7 +1897,6 @@ body.darkMode li.highlightDiff
 }
 
 /* end search results */
-
 
 @keyframes pulse
 {
@@ -1846,6 +1988,29 @@ a:hover > a.overlayUrl
 	white-space: nowrap;
 }
 
+.sdp-menu ul[data-v-ID] li > li
+{
+	margin: 0 0 0 calc(2em + 4px);
+}
+
+.sdp-menu ul[data-v-ID] > li.slickdealsHeaderDropdownItem,
+.sdp-menu ul[data-v-ID] > li.slickdealsHeaderDropdownItem.input
+{
+	padding: 0.35em 0;
+}
+
+.dealCard__priceContainer > span:last-of-type
+{
+	margin-right: 4px;
+}
+
+.sdp-menu ul[data-v-ID] li > input + span,
+.sdp-menu ul[data-v-ID] li > span:first-child
+{
+	margin-right: 0.3em;
+	margin-left: 0.8em;
+}
+
 #sdpChanges,
 .sdp-menu .changes,
 html.freeOnly .frontpageRecommendationCarousel li:not(.free),
@@ -1880,8 +2045,53 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	display: none;
 }
 
-/* setting checkbox */
+.sdp-menu .reset::before
+{
+	position: absolute;
+	top: 0;
+	left: 0.2em;
+	content: "\u00D7";
+	line-height: 1em;
+}
 
+.sdp-menu .reset
+{
+	position: relative;
+	display: inline-block;
+	width: 1.5em;
+	height: 2em;
+	cursor: pointer;
+	opacity: 0.3;
+	vertical-align: middle;
+}
+
+.sdp-menu .reset:hover
+{
+	opacity: 1;
+}
+
+.sdp-menu input[type="color"]
+{
+	/* width: 2em; */
+	height: 2em;
+	padding: 0;
+	border-color: transparent;
+	margin: 0;
+	cursor: pointer;
+	vertical-align: middle;
+}
+
+.sdp-menu input[type="color"]::-webkit-color-swatch-wrapper
+{
+	padding: 0;
+}
+
+.sdp-menu input[type="color"]::-webkit-color-swatch
+{
+	border-radius: 3px;
+}
+
+/* setting checkbox */
 .sdp-menu .slickdealsHeaderDropdownItem
 {
 	color: var(--hamburgerTextColor);
@@ -1890,18 +2100,18 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 
 .sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID]
 {
+	padding: 0 0.8em;
 	column-gap: 4px;
+	line-height: 2em;
 }
 
-.sdp-menu .slickdealsHeaderDropdownItem > a::before
+.sdp-menu .slickdealsHeaderDropdownItem > a:first-child::before
 {
-	display: inline-block;
 	width: 1em;
 	height: 1em;
-	margin: 0 0.1em;
 	content: "☐";
 	font-size: 1.3em;
-	line-height: 1em;
+	line-height: 1.1em;
 }
 
 /* end setting checkbox */
@@ -1953,11 +2163,6 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	white-space: pre-wrap;
 }
 
-.sdp-menu ul[data-v-ID] .slickdealsHeaderDropdownItem.input
-{
-	padding: 0.35em 0.8em;
-}
-
 .sdp-menu li > input
 {
 	display: inline-block;
@@ -1970,21 +2175,6 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	background-color: inherit;
 	color: inherit;
 	line-height: 2em;
-}
-
-.dealCard__priceContainer > span:last-of-type
-{
-	margin-right: 4px;
-}
-
-.sdp-menu li > span:first-child
-{
-	margin-right: 0.6em;
-}
-
-.sdp-menu li > span:last-child
-{
-	margin-left: 0.6em;
 }
 
 /* end setting input */
