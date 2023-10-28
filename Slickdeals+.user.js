@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Slickdeals+
 // @namespace    V@no
-// @description  Various enhancements
+// @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.10.22-161849
+// @version      23.10.26-011746
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,11 +13,8 @@
 {
 "use strict";
 
-const CHANGES = `+ customizable highlight colors
-+ license
-* renamed "No ads" to "Block ads"
-* version num is now the date when source was modified, not commit date
-* updated readme`;
+const CHANGES = `* free items prioritized over other highlightings
+* updated default highlight colors in dark theme`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1719,7 +1716,7 @@ const setColors = (ids =>
 		elColor.className = ids[i];
 		elHidden.append(elColor);
 	}
-	document.addEventListener("DOMContentLoaded", () => document.body.append(elHidden), false);
+	document.addEventListener("DOMContentLoaded" , () => document.body.append(elHidden), false);
 	return Object.assign(() =>
 	{
 		for(let i = 0; i < ids.length; i++)
@@ -1824,15 +1821,6 @@ li.highlightRating
 	--cardBackgroundColor: var(--backgroundColor);
 }
 
-.colorFreeBG,
-li.free .dealCard[data-v-ID],
-div.free,
-li.free
-{
-	--backgroundColor: var(--colorFreeBG, #ffdde0);
-	--highlightColor: var(--colorFreeBG, #FF5D6A);
-}
-
 .colorDiffBG,
 li.highlightDiff .dealCard[data-v-ID],
 div.highlightDiff,
@@ -1840,6 +1828,15 @@ li.highlightDiff
 {
 	--backgroundColor: var(--colorDiffBG, #ddefff);
 	--cardBackgroundColor: var(--backgroundColor);
+}
+
+.colorFreeBG,
+li.free .dealCard[data-v-ID],
+div.free,
+li.free
+{
+	--backgroundColor: var(--colorFreeBG, #ffdde0);
+	--highlightColor: var(--colorFreeBG, #FF5D6A);
 }
 
 div.free,
@@ -1852,22 +1849,12 @@ li.highlightDiff:not(.input)
 	animation: pulse .5s infinite alternate;
 }
 
-body.darkMode .colorFreeBG,
-body.darkMode li.free .dealCard[data-v-ID],
-body.darkMode div.free,
-body.darkMode li.free
-{
-	--backgroundColor: var(--colorFreeBG, #443534);
-	--highlightColor: var(--backgroundColor, #A11E1C);
-	--cardBackgroundColor: var(--backgroundColor);
-}
-
 body.darkMode .colorRatingBG,
 body.darkMode li.highlightRating .dealCard[data-v-ID],
 body.darkMode div.highlightRating,
 body.darkMode li.highlightRating
 {
-	--backgroundColor: var(--colorRatingBG, #222C21);
+	--backgroundColor: var(--colorRatingBG, #243f22);
 	--cardBackgroundColor: var(--backgroundColor);
 	--highlightColor: var(--backgroundColor, #bbfab5);
 }
@@ -1877,9 +1864,19 @@ body.darkMode li.highlightDiff .dealCard[data-v-ID],
 body.darkMode div.highlightDiff,
 body.darkMode li.highlightDiff
 {
-	--backgroundColor: var(--colorDiffBG, #321c38);
+	--backgroundColor: var(--colorDiffBG, #1C2E4A);
 	--cardBackgroundColor: var(--backgroundColor);
 	--highlightColor: var(--backgroundColor, #d877f3);
+}
+
+body.darkMode .colorFreeBG,
+body.darkMode li.free .dealCard[data-v-ID],
+body.darkMode div.free,
+body.darkMode li.free
+{
+	--backgroundColor: var(--colorFreeBG, #4e131f);
+	--highlightColor: var(--backgroundColor, #A11E1C);
+	--cardBackgroundColor: var(--backgroundColor);
 }
 
 /* search results */
