@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.10.28-234312
+// @version      23.10.30-131118
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,8 +13,8 @@
 {
 "use strict";
 
-const CHANGES = `! show "default color" setting until loaded
-! minor css fixes`;
+const CHANGES = `+ clicking around color picker is safe now
++ style for last "changes" in the menu`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1460,10 +1460,10 @@ const initMenu = elNav =>
 			}
 			case "color": {
 				// elSetting.type = "color";
-				const value = SETTINGS(id);
-				if (value)
+				const settingValue = SETTINGS(id);
+				if (settingValue)
 				{
-					elSetting.value = value;
+					elSetting.value = settingValue;
 					elSetting.type = "color";
 				}
 				else
@@ -1479,6 +1479,22 @@ const initMenu = elNav =>
 					elLabelBefore.textContent = label;
 				}
 				elLi.classList.add("input");
+				const elColorClose = $$("colorClose") || document.createElement("span");
+				if (!elColorClose.parentNode)
+				{
+					elColorClose.id = "colorClose";
+					elColorClose.addEventListener("mousedown", evt =>
+					{
+						evt.preventDefault();
+						evt.stopPropagation();
+						document.body.classList.remove("colorClose");
+					});
+					elUl.prepend(elColorClose);
+				}
+				events.click = () =>
+				{
+					document.body.classList.add("colorClose");
+				};
 				elLabelAfter = document.createElement("label");
 				elLabelAfter.setAttribute("for", id);
 				elLabelAfter.classList.add("reset");
@@ -1690,7 +1706,25 @@ const initMenu = elNav =>
 
 	const elChanges = document.createElement("span");
 	elChanges.className = "changes";
-	elChanges.textContent = CHANGES;
+	const changes = CHANGES.split("\n");
+	const types = {
+		"!": "fixed",
+		"*": "changed",
+		"+": "added",
+		"-": "removed",
+		"#": "comment",
+		"?": "unknown"
+	};
+	for(let i = 0, elDiv = document.createElement("div"); i < changes.length; i++)
+	{
+		const type = changes[i][0];
+		const className = types[type];
+		const text = className ? changes[i].slice(1) : changes[i];
+		elDiv = elDiv.cloneNode(false);
+		elDiv.className = className;
+		elDiv.textContent = text;
+		elChanges.append(elDiv);
+	}
 
 	const elChangesLink = document.createElement("a");
 	elChangesLink.className = "changesLink";
@@ -2010,7 +2044,7 @@ a:hover > a.overlayUrl
 
 .sdp-menu ul[data-v-ID] li > li
 {
-	margin: 0 0 0 calc(2em + 4px);
+	padding: 0 0 0 calc(2em + 4px);
 }
 
 .sdp-menu ul[data-v-ID] > li.slickdealsHeaderDropdownItem,
@@ -2036,6 +2070,7 @@ a:hover > a.overlayUrl
 	margin-left: 0.8em;
 }
 
+#colorClose,
 #sdpChanges,
 .sdp-menu .changes,
 html.freeOnly .frontpageRecommendationCarousel li:not(.free),
@@ -2068,6 +2103,80 @@ html.freeOnly.ratingOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,
 html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highlightRating,.free)
 {
 	display: none;
+}
+
+.changes .fixed::before,
+.changes .changed::before,
+.changes .removed::before,
+.changes .added::before,
+.changes .unknown::before
+{
+	display: inline-block;
+	width: 0.7em;
+	margin-left: -1em;
+	font-family: monospace;
+	font-size: 1.2em;
+	font-weight: bold;
+	line-height: 1em;
+	vertical-align: middle;
+}
+
+
+.changes .fixed::before
+{
+	color: orange;
+	content: "!";
+}
+
+.changes .changed::before
+{
+	height: 1em;
+	color: lightblue;
+	content: "*";
+	line-height: 1.2em;
+}
+
+.changes .removed::before
+{
+	color: red;
+	content: "-";
+}
+
+.changes .added::before
+{
+	color: green;
+	content: "+";
+}
+
+.changes .unknown::before
+{
+	color: grey;
+	content: "?";
+	opacity: 0.5;
+}
+
+.changes .comment
+{
+	font-style: italic;
+	opacity: 0.5;
+}
+
+
+.changes > div
+{
+	padding-left: 1em;
+}
+
+.changes > div:not(:last-of-type)
+{
+	padding-bottom: 0.1em;
+	border-bottom: 1px dotted #7f7f7f3f;
+	margin-bottom: 0.1em;
+}
+
+.changes > div.comment:not(:last-of-type)
+{
+	border-bottom: 1px dotted #7f7f7f6f;
 }
 
 .sdp-menu .reset::before
@@ -2201,7 +2310,6 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	display: block;
 	margin: 0.6em;
 	text-align: left;
-	white-space: pre-wrap;
 }
 
 .sdp-menu li > input
@@ -2386,5 +2494,20 @@ html.showDiff a[data-deal-diff]::after /* deal list page */
 .pageContent--reserveAnnouncementBar
 { /* top banner */
 	padding-top: 0 !important;
+}
+
+body.colorClose #colorClose
+{
+	position: fixed;
+	z-index: 101;
+	display: block;
+	background-color: transparent;
+	inset: 0;
+}
+
+body.colorClose .slickdealsHeader__dropdown[data-v-ID],
+body.colorClose .slickdealsHeader__mainNav[data-v-ID]
+{
+	transform: initial !important;	
 }`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
