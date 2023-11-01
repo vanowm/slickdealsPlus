@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.10.30-131118
+// @version      23.11.1-015937
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,8 +13,7 @@
 {
 "use strict";
 
-const CHANGES = `+ clicking around color picker is safe now
-+ style for last "changes" in the menu`;
+const CHANGES = `! tint-overlay not showing when menu opened`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1604,7 +1603,7 @@ const initMenu = elNav =>
 	initMenu.elOverlay = elOverlay;
 	for (const i in elMenu.dataset)
 	{
-		if (/^v-\d/.test(i))
+		if (/^v-\d|^v[A-F]/.test(i))
 			elOverlay.dataset[i] = elMenu.dataset[i];
 	}
 	initMenu.elOverlay.className = "slickdealsHeader__overlay";
