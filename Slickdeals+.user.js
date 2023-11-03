@@ -3,9 +3,10 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.11.1-015937
+// @version      23.11.3-223938
 // @license      MIT
 // @run-at       document-start
+// @require      data:javascript,console.log(location.href);
 // @grant        none
 // ==/UserScript==
 
@@ -13,12 +14,11 @@
 {
 "use strict";
 
-const CHANGES = `! tint-overlay not showing when menu opened`;
+const CHANGES = `! mobile view friendly`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
-const VERSION = document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1];
-
+const VERSION = document.currentScript && document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1] || GM_info.script.version;
 /**
  * A function that reads and writes data to the browser's local storage.
  * @function
@@ -1797,17 +1797,12 @@ const setColors = (ids =>
 })(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
 /**
- * The main function that initializes the Slickdeals+ script.
+ * This function fixes the CSS by replacing the data-v-ID attribute with a data-* attribute that matches the ID of the element.
  * @function
  * @returns {void}
  */
-const init = () =>
+const fixCSS = () =>
 {
-	document.removeEventListener("DOMContentLoaded", init, false);
-
-	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
-
-	document.body.classList.toggle("darkMode", isDarkMode);
 	const reCssFindId = /^v([A-F]|-\d)/;
 	const cssFindId = reCssFindId.test.bind(reCssFindId);
 	style.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
@@ -1822,6 +1817,24 @@ const init = () =>
 		}
 		return query;
 	});
+
+};
+
+/**
+ * The main function that initializes the Slickdeals+ script.
+ * @function
+ * @returns {void}
+ */
+const init = () =>
+{
+	document.removeEventListener("DOMContentLoaded", init, false);
+
+	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
+
+	document.body.classList.toggle("darkMode", isDarkMode);
+
+	fixCSS();
+	window.addEventListener("load", fixCSS, false);
 	document.head.append(style);
 
 	//for some reason observer failed to process everything while page is still loading, so we do it manually
@@ -2284,16 +2297,30 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 
 .sdp-menu .footer
 {
+	height: auto;
+	margin-top: 0;
 	opacity: 0.5;
 	text-align: right;
 }
 
+.sdp-menu input[type="checkbox"]:checked + label.footer::before, /* mobile */
 .sdp-menu .footer::before
 {
+	/* unset = for mobile view */
+	position: unset;
+	width: auto;
+	height: unset;
+	padding: unset;
+	border: unset;
+	margin: unset;
+	background: unset;
 	content: attr(data-label);
 	cursor: pointer;
+	font-family: unset !important;
+	font-size: x-small;
 	opacity: 0.5;
 	text-align: right;
+	vertical-align: unset;
 }
 
 .changesLink
@@ -2345,7 +2372,8 @@ html.updated .sdp-updated
 	top: 0;
 	left: 0;
 	width: 100%;
-	height: 1.5rem;
+
+	/* height: 1.5rem; */
 	animation: shrink 60s ease 600s forwards;
 	background-color: darkred;
 	color: white;
@@ -2454,12 +2482,15 @@ html.updated .sdp-updated
 	}
 }
 
+.blueprint .bp-p-dealCard_priceContainer, /* mobile */
 .dealCard__priceContainer[data-v-ID]
 {
 	display: flex;
 	overflow: hidden;
 	height: min-content;
 	flex-wrap: wrap;
+	justify-content: flex-start;
+	text-align: left;
 }
 
 .cardPriceInfo /* added price wrapper for https://slickdeals.net/deals/*** */
@@ -2471,20 +2502,47 @@ html.updated .sdp-updated
 	grid-area: price;
 }
 
+html.showDiff .bp-p-dealCard_priceContainer[data-deal-diff]::after, /* mobile */
 html.showDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
 html.showDiff .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
 html.showDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
 html.showDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
+html.showDiff .searchPage > .pricingInfo > .prices[data-deal-diff]::after, /* search result mobile */
 html.showDiff a[data-deal-diff]::after /* deal list page */
 {
+	display: block;
 	width: 100%; /* force on new line */
 	content: "($" attr(data-deal-diff) " | " attr(data-deal-percent) "%)";
 	font-style: italic;
 }
 
+html.showDiff .bp-p-dealCard_priceContainer[data-deal-diff]::after /* mobile */
+{
+	padding-left: 8px;
+}
+
+body[data-view="mobile"] .dealCard__content[data-v-ID], /* mobile firefox */
+body[data-view="mobile"] .dealCard--mini .dealCard__content[data-v-ID]  /* mobile */
+{
+	grid-template-rows:auto 67px auto 1fr 20px;
+}
+
+body.colorClose .slickdealsHeader__dropdown[data-v-ID],
+body.colorClose .slickdealsHeader__mainNav[data-v-ID]
+{
+	transform: initial !important;	
+}
+
+body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID]
+{
+	/* min-width: 72vw; */
+	max-width: 72vw;
+}
+
 @media (width >= 768px)
 {
-	.dealCard__content[data-v-ID]
+	.dealCard__content[data-v-ID],
+	.blueprint .bp-p-socialDealCard .bp-c-card_content /* mobile */
  	{
 		grid-template-rows:auto 67px auto 1fr 20px;
 	}
@@ -2502,11 +2560,5 @@ body.colorClose #colorClose
 	display: block;
 	background-color: transparent;
 	inset: 0;
-}
-
-body.colorClose .slickdealsHeader__dropdown[data-v-ID],
-body.colorClose .slickdealsHeader__mainNav[data-v-ID]
-{
-	transform: initial !important;	
 }`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
