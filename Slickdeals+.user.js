@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.11.3-223938
+// @version      23.11.4-204537
 // @license      MIT
 // @run-at       document-start
 // @require      data:javascript,console.log(location.href);
@@ -14,7 +14,7 @@
 {
 "use strict";
 
-const CHANGES = `! mobile view friendly`;
+const CHANGES = `! cosmetics for mobile view`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1697,6 +1697,7 @@ const initMenu = elNav =>
 	elFooter.className = "slickdealsHeaderDropdownItem footer";
 	elFooter.setAttribute("for", "sdpChanges");
 	elFooter.dataset.label = "v" + VERSION;
+	elFooter.title = "Changes";
 	elFooter.dataset[dataset] = "";
 
 	const elFooterCheckbox = document.createElement("input");
@@ -2082,6 +2083,7 @@ a:hover > a.overlayUrl
 	margin-left: 0.8em;
 }
 
+.displayAdContainer, /* ads */
 #colorClose,
 #sdpChanges,
 .sdp-menu .changes,
@@ -2266,6 +2268,11 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	line-height: 2em;
 }
 
+body[data-view="mobile"] .sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID]
+{
+	padding-right: 0;
+}
+
 .sdp-menu .slickdealsHeaderDropdownItem > a:first-child::before
 {
 	width: 1em;
@@ -2303,8 +2310,24 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	text-align: right;
 }
 
+body.colorClose .slickdealsHeader__dropdown[data-v-ID],
+body.colorClose .slickdealsHeader__mainNav[data-v-ID]
+{
+	transform: initial !important;	
+}
+
+body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mobile */
+{
+	/* min-width: 72vw; */
+	max-width: 72vw;
+	padding-left: 0;
+	font-size: 13px;
+}
+
 .sdp-menu input[type="checkbox"]:checked + label.footer::before, /* mobile */
-.sdp-menu .footer::before
+.sdp-menu input[type="checkbox"] + label::before, /* mobile don't show a checkbox */
+.sdp-menu .footer::before,
+.sdp-menu .footer::after
 {
 	/* unset = for mobile view */
 	position: unset;
@@ -2314,13 +2337,28 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	border: unset;
 	margin: unset;
 	background: unset;
-	content: attr(data-label);
 	cursor: pointer;
 	font-family: unset !important;
 	font-size: x-small;
 	opacity: 0.5;
-	text-align: right;
 	vertical-align: unset;
+}
+
+.sdp-menu .footer::after
+{
+	content: attr(data-label);
+	float: right;
+}
+
+.sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
+{
+	content: attr(title);
+	float: left;
+}
+
+body:not([data-view="mobile"]) .sdp-menu input[type="checkbox"]:checked + label.footer::before /* mobile */
+{
+	margin-left: 1em;
 }
 
 .changesLink
@@ -2329,6 +2367,11 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	right: 0.8em;
 	display: block;
 	font-size: 0.8em;
+}
+
+body[data-view="mobile"] .changesLink
+{
+	right: 0;
 }
 
 #sdpChanges:checked ~ .changes
@@ -2527,17 +2570,6 @@ body[data-view="mobile"] .dealCard--mini .dealCard__content[data-v-ID]  /* mobil
 	grid-template-rows:auto 67px auto 1fr 20px;
 }
 
-body.colorClose .slickdealsHeader__dropdown[data-v-ID],
-body.colorClose .slickdealsHeader__mainNav[data-v-ID]
-{
-	transform: initial !important;	
-}
-
-body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID]
-{
-	/* min-width: 72vw; */
-	max-width: 72vw;
-}
 
 @media (width >= 768px)
 {
