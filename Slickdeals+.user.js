@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.11.4-204537
+// @version      23.11.5-045908
 // @license      MIT
 // @run-at       document-start
 // @require      data:javascript,console.log(location.href);
@@ -14,7 +14,9 @@
 {
 "use strict";
 
-const CHANGES = `! cosmetics for mobile view`;
+const CHANGES = `* multiple highlighted colors are mixed together
+* changes log cosmetic fixes
+! more mobile view issues`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -42,6 +44,16 @@ const SETTINGS = (() =>
 			default: 0,
 			name: "Free Only",
 			description: "Only show free items",
+		},
+		diffOnly: { /* show highlighted difference only */
+			default: 0,
+			name: "Difference Only",
+			description: "Only show highlighted price diff items",
+		},
+		ratingOnly: { /* show rating only */
+			default: 0,
+			name: "Score Only",
+			description: "Only show highlighted score items",
 		},
 		resolveLinks: { /* use resolved links by default*/
 			default: 1,
@@ -848,6 +860,62 @@ const noAds = (() =>
 	};
 })();
 noAds(document);
+
+// html.freeOnly .frontpageRecommendationCarousel li:not(.free),
+// html.freeOnly .dealTiles li:not(.free),
+// html.freeOnly .categoryPage__main li:not(.free), /* https://slickdeals.net/deals/*** */
+// html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
+// html.freeOnly .frontpageGrid li:not(.free),
+
+// {
+// 	const cardsList = [
+// 		".frontpageRecommendationCarousel li",
+// 		".dealTiles li",
+// 		".categoryPage__main li",
+// 		".bp-p-categoryPage_main li",
+// 		".frontpageGrid li"
+// 	];
+// 	const settingsList = [".freeOnly", ".ratingOnly.highlightRating", ".diffOnly.highlightDff"];
+// 	const result = [];
+// 	const notList = [];
+
+// 	const getCombinations = valuesArray =>
+// 	{
+
+// 		const combi = [];
+// 		let temporary = [];
+// 		const slent = Math.pow(2, valuesArray.length);
+
+// 		for (let i = 0; i < slent; i++)
+// 		{
+// 			temporary = [];
+// 			for (let j = 0; j < valuesArray.length; j++)
+// 			{
+// 				if ((i & Math.pow(2, j)))
+// 				{
+// 					temporary.push(valuesArray[j]);
+// 				}
+// 			}
+// 			if (temporary.length > 0)
+// 			{
+// 				combi.push(temporary);
+// 			}
+// 		}
+
+// 		combi.sort((a, b) => a.length - b.length);
+// 		console.log(combi.join("\n"));
+// 		return combi;
+// 	};
+// 	console.log(getCombinations(settingsList));
+// 	for(let i = 0; i < cardsList.length; i++)
+// 	{
+// 		for(let j = 0; j < settingsList.length; j++)
+// 		{
+
+// 		}
+// 	}
+// }
+
 const style = document.createElement("style");
 style.innerHTML = css;
 if (document.head)
@@ -1082,6 +1150,7 @@ const highlightCards = node =>
 	else
 		nlItems = $$(	"li.frontpageGrid__feedItem," + //front page
 						"li.carousel__slide," + // front page carousel
+						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
 						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
 						"div.resultRow" //search result
 		, node, true);
@@ -1654,9 +1723,11 @@ const initMenu = elNav =>
 	}
 	elUl.append(elMenuItem);
 	elUl.append(createMenuItem("showDiff"));
+	// elUl.append(createMenuItem("diffOnly"));
 	const elHighlightDiff = createMenuItem("highlightDiff", {labelAfter: "%"});
 	elHighlightDiff.append(createMenuItem("colorDiffBG"));
 	elUl.append(elHighlightDiff);
+	// elUl.append(createMenuItem("ratingOnly"));
 	const elHighlightRating = createMenuItem("highlightRating");
 	elHighlightRating.append(createMenuItem("colorRatingBG"));
 	elUl.append(elHighlightRating);
@@ -1717,11 +1788,17 @@ const initMenu = elNav =>
 	};
 	for(let i = 0, elDiv = document.createElement("div"); i < changes.length; i++)
 	{
-		const type = changes[i][0];
+		if (changes[i] === "")
+			continue;
+
+		const type = types[changes[i][0]] ? changes[i][0] : "+";
 		const className = types[type];
-		const text = className ? changes[i].slice(1) : changes[i];
+		const text = changes[i][0] === type ? changes[i].slice(1) : " " + changes[i];
 		elDiv = elDiv.cloneNode(false);
 		elDiv.className = className;
+		if (className)
+			elDiv.title = className[0].toUpperCase() + className.slice(1);
+
 		elDiv.textContent = text;
 		elChanges.append(elDiv);
 	}
@@ -1851,7 +1928,12 @@ const init = () =>
 };//init()
 
 document.addEventListener("DOMContentLoaded", init, false);
-})(`a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
+})(`:root
+{
+	--colorMix: in srgb;
+}
+
+a.resolved:not(.seeDealButton):not(.button.success):not(.dealDetailsOutclickButton)
 {
 	color: #00b309;
 }
@@ -1876,34 +1958,41 @@ body.bp-s-darkMode .dealDetailsOutclickButton[data-v-ID].resolved,
 	--buttonBackgroundColor: #06551a;
 }
 
-.colorRatingBG,
+div.colorRatingBG,
+li.colorRatingBG,
 li.highlightRating .dealCard[data-v-ID],
 div.highlightRating,
 li.highlightRating
 {
-	--backgroundColor: var(--colorRatingBG, #E4FFDD);
-	--cardBackgroundColor: var(--backgroundColor);
+	--colorRating: var(--colorRatingBG, #E4FFDD);
+	--backgroundColor: var(--colorRating);
+	--cardBackgroundColor: var(--colorRating);
 }
 
-.colorDiffBG,
+div.colorDiffBG,
+li.colorDiffBG,
 li.highlightDiff .dealCard[data-v-ID],
 div.highlightDiff,
 li.highlightDiff
 {
-	--backgroundColor: var(--colorDiffBG, #ddefff);
-	--cardBackgroundColor: var(--backgroundColor);
+	--colorDiff: var(--colorDiffBG, #ddefff);
+	--backgroundColor: var(--colorDiff);
+	--cardBackgroundColor: var(--colorDiff);
 }
 
-.colorFreeBG,
+div.colorFreeBG,
+li.colorFreeBG,
 li.free .dealCard[data-v-ID],
 div.free,
 li.free
 {
-	--backgroundColor: var(--colorFreeBG, #ffdde0);
-	--highlightColor: var(--colorFreeBG, #FF5D6A);
+	--colorFree: var(--colorFreeBG, #ffdde0);
+	--backgroundColor: var(--colorFree);
+	--cardBackgroundColor: var(--colorFree);
+	--highlightColor: #FF5D6A;
 }
 
-div.free,
+/* div.free,
 li.free:not(.input),
 div.highlightRating,
 li.highlightRating:not(.input),
@@ -1911,36 +2000,42 @@ div.highlightDiff,
 li.highlightDiff:not(.input)
 {
 	animation: pulse .5s infinite alternate;
-}
+} */
 
-body.darkMode .colorRatingBG,
+body.darkMode div.colorRatingBG,
+body.darkMode li.colorRatingBG,
 body.darkMode li.highlightRating .dealCard[data-v-ID],
 body.darkMode div.highlightRating,
 body.darkMode li.highlightRating
 {
-	--backgroundColor: var(--colorRatingBG, #243f22);
-	--cardBackgroundColor: var(--backgroundColor);
-	--highlightColor: var(--backgroundColor, #bbfab5);
+	--colorRating: var(--colorRatingBG, #243f22);
+	--backgroundColor: var(--colorRating);
+	--cardBackgroundColor: var(--colorRating);
+	--highlightColor: var(--colorRating);
 }
 
-body.darkMode .colorDiffBG,
+body.darkMode div.colorDiffBG,
+body.darkMode li.colorDiffBG,
 body.darkMode li.highlightDiff .dealCard[data-v-ID],
 body.darkMode div.highlightDiff,
 body.darkMode li.highlightDiff
 {
-	--backgroundColor: var(--colorDiffBG, #1C2E4A);
-	--cardBackgroundColor: var(--backgroundColor);
-	--highlightColor: var(--backgroundColor, #d877f3);
+	--colorDiff: var(--colorDiffBG, #1C2E4A);
+	--backgroundColor: var(--colorDiff);
+	--cardBackgroundColor: var(--colorDiff);
+	--highlightColor: var(--colorDiff);
 }
 
-body.darkMode .colorFreeBG,
+body.darkMode div.colorFreeBG,
+body.darkMode li.colorFreeBG,
 body.darkMode li.free .dealCard[data-v-ID],
 body.darkMode div.free,
 body.darkMode li.free
 {
-	--backgroundColor: var(--colorFreeBG, #4e131f);
-	--highlightColor: var(--backgroundColor, #A11E1C);
-	--cardBackgroundColor: var(--backgroundColor);
+	--colorFree: var(--colorFreeBG, #4e131f);
+	--backgroundColor: var(--colorFree);
+	--cardBackgroundColor: var(--colorFree);
+	--highlightColor: var(--colorFree);
 }
 
 /* search results */
@@ -1951,6 +2046,48 @@ body.darkMode li.free
 	background-color: var(--backgroundColor);
 }
 
+/* stylelint-disable-next-line no-descending-specificity */
+li.highlightRating.highlightDiff,
+li.highlightRating.highlightDiff .dealCard[data-v-ID],
+body.darkMode li.highlightRating.highlightDiff,
+body.darkMode li.highlightRating.highlightDiff .dealCard[data-v-ID]
+{
+	--backgroundColor: color-mix(var(--colorMix), var(--colorRating), var(--colorDiff));
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+/* stylelint-disable-next-line no-descending-specificity */
+li.highlightRating.free,
+li.highlightRating.free .dealCard[data-v-ID],
+body.darkMode li.highlightRating.free,
+body.darkMode li.highlightRating.free .dealCard[data-v-ID]
+{
+	--backgroundColor: color-mix(var(--colorMix), var(--colorRating), var(--colorFree));
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+/* stylelint-disable-next-line no-descending-specificity */
+li.free.highlightDiff,
+li.free.highlightDiff .dealCard[data-v-ID],
+body.darkMode li.free.highlightDiff,
+body.darkMode li.free.highlightDiff .dealCard[data-v-ID]
+{
+	--backgroundColor: color-mix(var(--colorMix), var(--colorFree), var(--colorDiff));
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+/* stylelint-disable-next-line no-descending-specificity */
+li.free.highlightRating.highlightDiff,
+li.free.highlightRating.highlightDiff .dealCard[data-v-ID],
+body.darkMode li.free.highlightRating.highlightDiff,
+body.darkMode li.free.highlightRating.highlightDiff .dealCard[data-v-ID]
+{
+	--backgroundColor: color-mix(var(--colorMix), color-mix(var(--colorMix), var(--colorRating), var(--colorFree)), color-mix(var(--colorMix), var(--colorFree), var(--colorDiff)));
+	--cardBackgroundColor: var(--backgroundColor);
+}
+
+
+
 .dealDetailsPriceInfo[data-deal-diff],
 .resultRow.free
 {
@@ -1959,11 +2096,11 @@ body.darkMode li.free
 
 /* end search results */
 
-@keyframes pulse
+/* @keyframes pulse
 {
 	from{ box-shadow: 0 0 1em var(--highlightColor); }
 	to{ box-shadow: 0 0 0.5em var(--highlightColor); }
-}
+} */
 
 #fpMainContent .gridCategory .fpGridBox.list.free,
 #fpMainContent .gridCategory .fpGridBox.simple.free
@@ -2084,37 +2221,65 @@ a:hover > a.overlayUrl
 }
 
 .displayAdContainer, /* ads */
+.mobileAdFluid, /* ads */
 #colorClose,
 #sdpChanges,
 .sdp-menu .changes,
 html.freeOnly .frontpageRecommendationCarousel li:not(.free),
 html.freeOnly .dealTiles li:not(.free),
+html.freeOnly .deals li:not(.free), /* mobile */
+html.freeOnly .frontpageMobileRecommendationCarousel__list li:not(.free), /* mobile */
+html.freeOnly .categoryPage__main li:not(.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly .frontpageGrid li:not(.free),
-html.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff),
-html.diffOnly .dealTiles li:not(.highlightDiff),
-html.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
-html.diffOnly .frontpageGrid li:not(.highlightDiff),
-html.ratingOnly .frontpageRecommendationCarousel li:not(.highlightRating),
-html.ratingOnly .dealTiles li:not(.highlightRating),
-html.ratingOnly .bp-p-categoryPage_main li:not(.highlightRating), /* https://slickdeals.net/deals/*** */
-html.ratingOnly .frontpageGrid li:not(.highlightRating),
-html.freeOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.free),
-html.freeOnly.diffOnly .dealTiles li:not(.highlightDiff,.free),
-html.freeOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.free), /* https://slickdeals.net/deals/*** */
-html.freeOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.free),
-html.freeOnly.ratingOnly .frontpageRecommendationCarousel li:not(.highlightRating,.free),
-html.freeOnly.ratingOnly .dealTiles li:not(.highlightRating,.free),
-html.freeOnly.ratingOnly .bp-p-categoryPage_main li:not(.highlightRating,.free), /* https://slickdeals.net/deals/*** */
-html.freeOnly.ratingOnly .frontpageGrid li:not(.highlightRating,.free),
-html.ratingOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating),
-html.ratingOnly.diffOnly .dealTiles li:not(.highlightDiff,.highlightRating),
-html.ratingOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating), /* https://slickdeals.net/deals/*** */
-html.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highlightRating),
-html.freeOnly.ratingOnly.diffOnly .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating,.free),
-html.freeOnly.ratingOnly.diffOnly .dealTiles li:not(.highlightDiff,.highlightRating,.free),
-html.freeOnly.ratingOnly.diffOnly .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
-html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highlightRating,.free)
+
+html.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff),
+html.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff),
+html.diffOnly.highlightDiff .deals li:not(.highlightDiff), /* mobile */	
+html.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff), /* mobile */
+html.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
+html.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
+html.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff),
+
+html.ratingOnly.highlightRating .frontpageRecommendationCarousel li:not(.highlightRating),
+html.ratingOnly.highlightRating .dealTiles li:not(.highlightRating),
+html.ratingOnly.highlightRating .deals li:not(.highlightRating), /* mobile */
+html.ratingOnly.highlightRating .frontpageMobileRecommendationCarousel__list li:not(.highlightRating), /* mobile */
+html.ratingOnly.highlightRating .categoryPage__main li:not(.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly.highlightRating .bp-p-categoryPage_main li:not(.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly.highlightRating .frontpageGrid li:not(.highlightRating),
+
+html.freeOnly.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff,.free),
+html.freeOnly.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff,.free),
+html.freeOnly.diffOnly.highlightDiff .deals li:not(.highlightDiff,.free), /* mobile */
+html.freeOnly.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff,.free), /* mobile */
+html.freeOnly.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.free),
+
+html.freeOnly.ratingOnly.highlightRating .frontpageRecommendationCarousel li:not(.highlightRating,.free),
+html.freeOnly.ratingOnly.highlightRating .dealTiles li:not(.highlightRating,.free),
+html.freeOnly.ratingOnly.highlightRating .deals li:not(.highlightRating,.free), /* mobile */
+html.freeOnly.ratingOnly.highlightRating .frontpageMobileRecommendationCarousel__list li:not(.highlightRating,.free), /* mobile */
+html.freeOnly.ratingOnly.highlightRating .categoryPage__main li:not(.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly.highlightRating .bp-p-categoryPage_main li:not(.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly.highlightRating .frontpageGrid li:not(.highlightRating,.free),
+
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating),
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff,.highlightRating),
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .deals li:not(.highlightDiff,.highlightRating), /* mobile */
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff,.highlightRating), /* mobile */
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff,.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating), /* https://slickdeals.net/deals/*** */
+html.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.highlightRating),
+
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff,.highlightRating,.free),
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff,.highlightRating,.free),
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .deals li:not(.highlightDiff,.highlightRating,.free), /* mobile */
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff,.highlightRating,.free), /* mobile */
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.highlightRating,.free)
 {
 	display: none;
 }
@@ -2169,12 +2334,6 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 	opacity: 0.5;
 }
 
-.changes .comment
-{
-	font-style: italic;
-	opacity: 0.5;
-}
-
 
 .changes > div
 {
@@ -2183,15 +2342,21 @@ html.freeOnly.ratingOnly.diffOnly .frontpageGrid li:not(.highlightDiff,.highligh
 
 .changes > div:not(:last-of-type)
 {
-	padding-bottom: 0.1em;
-	border-bottom: 1px dotted #7f7f7f3f;
+	padding: 0.2em 0 0.2em 1em;
 	margin-bottom: 0.1em;
 }
 
-.changes > div.comment:not(:last-of-type)
+.changes > div.comment
 {
-	border-bottom: 1px dotted #7f7f7f6f;
+	padding-left: 0;
+	margin-left: -.2em;
+	font-style: italic;
+	opacity: 0.5;
 }
+
+/* .changes > div.comment:not(:last-of-type)
+{
+} */
 
 .sdp-menu .reset::before
 {
