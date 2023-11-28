@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.11.5-045908
+// @version      23.11.28-103050
 // @license      MIT
 // @run-at       document-start
 // @require      data:javascript,console.log(location.href);
@@ -14,9 +14,8 @@
 {
 "use strict";
 
-const CHANGES = `* multiple highlighted colors are mixed together
-* changes log cosmetic fixes
-! more mobile view issues`;
+const CHANGES = `! optimized counter for multiple api calls
+* api call method`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1182,6 +1181,32 @@ const highlightCards = node =>
 };
 
 /**
+ * Set dataset values to multiple elements at once.
+ *
+ * @type {Proxy}
+ */
+const datasets = new Proxy([document.documentElement.dataset], {
+	get: (target, property) => (property === "__target" ? target : target[0][property]),
+	set: (target, property, value) =>
+	{
+		for(let i = 0; i < target.length; i++)
+			target[i][property] = value;
+
+		return true;
+	},
+	deleteProperty: (target, property) =>
+	{
+		for(let i = 0; i < target.length; i++)
+		{
+			if (property in target[i])
+				delete target[i][property];
+		}
+
+		return true;
+	}
+});
+
+/**
  * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
  * @function
  * @param {HTMLElement|NodeList} node - The root node or NodeList to search for links to fix.
@@ -1250,34 +1275,6 @@ const processLinks = (node, force) =>
 		if (!SETTINGS.resolveLinks)
 			return;
 
-		/**
-		 * Set dataset values to multiple elements at once.
-		 *
-		 * @type {Proxy}
-		 */
-		const datasets = new Proxy([document.documentElement.dataset], {
-			get: (target, property) => target[0][property],
-			set: (target, property, value) =>
-			{
-				if (target.length === 1 && initMenu.elMenu)
-					target.push(initMenu.elMenu.dataset, initMenu.elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
-
-				for(let i = 0; i < target.length; i++)
-					target[i][property] = value;
-
-				return true;
-			},
-			deleteProperty: (target, property) =>
-			{
-				for(let i = 0; i < target.length; i++)
-				{
-					if (property in target[i])
-						delete target[i][property];
-				}
-
-				return true;
-			}
-		});
 		if (datasets.loading === undefined)
 			datasets.loading = 0;
 
@@ -1403,7 +1400,7 @@ const updateLinks = () =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
-const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
+const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(fVoid);
 
@@ -1666,6 +1663,7 @@ const initMenu = elNav =>
 
 	const elMenu = elNav.lastElementChild.cloneNode(true);
 	initMenu.elMenu = elMenu;
+	datasets.__target.push(elMenu.dataset, elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
 	initMenu.elHeader = elNav;
 	const elHeader = elNav.closest("header");
 	const elOverlay = document.createElement("div");
@@ -1784,7 +1782,7 @@ const initMenu = elNav =>
 		"+": "added",
 		"-": "removed",
 		"#": "comment",
-		"?": "unknown"
+		"?": "help"
 	};
 	for(let i = 0, elDiv = document.createElement("div"); i < changes.length; i++)
 	{
@@ -2288,7 +2286,7 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid l
 .changes .changed::before,
 .changes .removed::before,
 .changes .added::before,
-.changes .unknown::before
+.changes .help::before
 {
 	display: inline-block;
 	width: 0.7em;
@@ -2327,11 +2325,15 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid l
 	content: "+";
 }
 
-.changes .unknown::before
+.changes .help
+{
+	opacity: 0.7;
+}
+
+.changes .help::before
 {
 	color: grey;
 	content: "?";
-	opacity: 0.5;
 }
 
 
