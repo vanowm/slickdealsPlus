@@ -3,10 +3,9 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.11.28-103050
+// @version      23.12.3-021729
 // @license      MIT
 // @run-at       document-start
-// @require      data:javascript,console.log(location.href);
 // @grant        none
 // ==/UserScript==
 
@@ -14,8 +13,8 @@
 {
 "use strict";
 
-const CHANGES = `! optimized counter for multiple api calls
-* api call method`;
+const CHANGES = `* moved links storage data into it's own object
+- "require" junk in the userscript metadata block`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -30,6 +29,7 @@ const VERSION = document.currentScript && document.currentScript.textContent.mat
 const SETTINGS = (() =>
 {
 	const LocalStorageName = "slickdeals+";
+	const LocalStorageNameLinks = LocalStorageName + "links";
 	// upgrade from v1.12
 	const oldData = localStorage.getItem("linksCache");
 	if (oldData)
@@ -124,6 +124,7 @@ const SETTINGS = (() =>
 	};
 
 	const settings = new Map();
+	const links = new Map();
 	for(const i in defaultSettings)
 		settings.set(i, defaultSettings[i].default);
 
@@ -132,6 +133,17 @@ const SETTINGS = (() =>
 		const data = JSON.parse(localStorage.getItem(LocalStorageName));
 		for(const i in data)
 			settings.set(i, data[i]);
+	}
+	catch{}
+	const isLink = /^\d/;
+	try
+	{
+		const data = JSON.parse(localStorage.getItem(LocalStorageNameLinks));
+		for(const i in data)
+		{
+			if (isLink.test(i))
+				links.set(i, data[i]);
+		}
 	}
 	catch{}
 	/**
@@ -189,14 +201,18 @@ const SETTINGS = (() =>
 				settings.set("highlightRating", settings.get("thumbsUp"));
 
 		}
+		if (compareVersion(previousVersion, "23.12.3-012211") < 0)
+		{
+			for(const [id,value] of settings)
+			{
+				if (isLink.test(id))
+					links.set(id, value);
+			}
+		}
 	}
 	/* clean up old/invalid settings */
-	const isLink = /^\d/;
 	for(const [id] of settings)
 	{
-		if (isLink.test(id))
-			continue;
-
 		if (!Object.prototype.hasOwnProperty.call(defaultSettings, id))
 			settings.delete(id);
 		else if (defaultSettings[id].default !== null && typeof settings.get(id) !== typeof defaultSettings[id].default)
@@ -328,19 +344,20 @@ const SETTINGS = (() =>
 		{
 			// try save settings, if it fails, remove previous items until it succeeds
 			localStorage.setItem(LocalStorageName, JSON.stringify(Object.fromEntries(settings)));
+			localStorage.setItem(LocalStorageNameLinks, JSON.stringify(Object.fromEntries(links)));
 		}
 		catch
 		{
 			//removing in batches exponentially
-			for(let i = 0, key, keys = settings.keys(), count = ++attempt ** 2; i < count; i++)
+			for(let i = 0, key, keys = links.keys(), count = ++attempt ** 2; i < count; i++)
 			{
 				do
 				{
 					key = keys.next().value;
 				}
-				while(key && !isLink.test(key)); //don't remove settings
+				while(key);
 
-				settings.delete(key);
+				links.delete(key);
 			}
 
 			if (attempt < 10_000)
@@ -361,10 +378,11 @@ const SETTINGS = (() =>
 	 */
 	const settingsFunction = (id, value) =>
 	{
+		const storageData = isLink.test(id) ? links : settings;
 		if (value === undefined)
-			return settings.get(id);
+			return storageData.get(id);
 
-		settings.set(id, value);
+		storageData.set(id, value);
 		if (defaultSettings[id] && defaultSettings[id].onChange instanceof Function)
 			defaultSettings[id].onChange(value);
 
