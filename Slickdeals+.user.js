@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.12.3-021729
+// @version      23.12.23-053323
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,12 +13,13 @@
 {
 "use strict";
 
-const CHANGES = `* moved links storage data into it's own object
-- "require" junk in the userscript metadata block`;
+const CHANGES = `* use optional chaining
+* better visibility of changes log header
+* relaxed ad-blocking by allowing \`google\` in url and block \`google.com\` instead`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
-const VERSION = document.currentScript && document.currentScript.textContent.match(/^\/\/ @version\s+(.+)$/m)[1] || GM_info.script.version;
+const VERSION = document.currentScript?.textContent.match(/^\/\/ @version\s+(.+)$/m)[1] || GM_info.script.version;
 /**
  * A function that reads and writes data to the browser's local storage.
  * @function
@@ -284,6 +285,17 @@ const SETTINGS = (() =>
 	});
 
 	/**
+	 * Returns a read-only proxy object that retrieves the value of a specific key from the default settings object.
+	 *
+	 * @param {string} key - The key to retrieve from the default settings object.
+	 * @returns {Object} - A read-only proxy object that retrieves the value of the specified key from the default settings object.
+	 */
+	const linksGetData = () => new Proxy(links, {
+		get: (target, name) => target.get(name),
+		set: () => true, //read-only
+	});
+
+	/**
 	 * Resets all settings to their default values, except for the version number.
 	 * @function
 	 * @name settingsReset
@@ -321,6 +333,10 @@ const SETTINGS = (() =>
 		$max: settingsGetData("max"),
 		$onChange: settingsGetData("onChange"),
 		$keys: defaultKeys,
+		$links: new Proxy(links, {
+			get: (target, name) => target.get(name),
+			set: () => true, //read-only
+		}),
 		$reset: () => settingsReset()
 	};
 	let timer;
@@ -383,7 +399,7 @@ const SETTINGS = (() =>
 			return storageData.get(id);
 
 		storageData.set(id, value);
-		if (defaultSettings[id] && defaultSettings[id].onChange instanceof Function)
+		if (defaultSettings[id]?.onChange instanceof Function)
 			defaultSettings[id].onChange(value);
 
 		document.documentElement.classList.toggle(id, !!value);
@@ -403,6 +419,14 @@ const SETTINGS = (() =>
 			set: (target, id, value) => target(id, value)
 		});
 })();
+
+/**
+ * Creates a shallow copy of an object.
+ *
+ * @param {Object} object - The object to be cloned.
+ * @returns {Object} - The cloned object.
+ */
+const CLONE = object => Object.assign({}, object);
 
 /**
  * A function that does nothing and returns undefined.
@@ -452,7 +476,7 @@ const noAds = (() =>
 						colors[~~blocked],
 						colors[(this.tagName.toLowerCase() || "") + name],
 						value,
-						isAds.result,
+						CLONE(isAds.result),
 						this);
 
 					this.remove();
@@ -488,7 +512,7 @@ const noAds = (() =>
 				colors[~~blocked],
 				colors.fetch,
 				args,
-				isAds.result
+				CLONE(isAds.result)
 			);
 
 			return Promise.resolve(new Response("", {status: 403, statusText: "Blocked"}));
@@ -508,7 +532,7 @@ const noAds = (() =>
 				colors[~~blocked],
 				colors.xhr,
 				args,
-				isAds.result
+				CLONE(isAds.result)
 			);
 
 			this.send = this.abort;
@@ -548,7 +572,7 @@ const noAds = (() =>
 							colors[~~blocked],
 							colors[(name === "src" ? this.tagName.toLowerCase() : "") + name],
 							value,
-							isAds.result,
+							CLONE(isAds.result),
 							this
 						);
 
@@ -591,7 +615,7 @@ const noAds = (() =>
 						colors.dom,
 						node,
 						this,
-						isAds.result
+						CLONE(isAds.result)
 					);
 					node.remove();
 					args.splice(i--, 1);
@@ -694,7 +718,7 @@ const noAds = (() =>
 			/s\.pinimg\.com/,
 			/s\.yimg\.com/,
 			/doubleclick/,
-			/google/,
+			/google\.com/,
 			/clicktrue/
 		],
 		blockText: [
@@ -834,11 +858,11 @@ const noAds = (() =>
 			{
 				if (node.src && isAds(node.src))
 				{
-					debug("%cSlickdeals+ blocked%c iframe" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.iframe, node.src, isAds.result, node);
+					debug("%cSlickdeals+ blocked%c iframe" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.iframe, node.src, CLONE(isAds.result), node);
 					node.remove();
 					continue;
 				}
-				// debug("%cSlickdeals+ allowed%c iframe", colors[0], colors.iframe, node.src, isAds.result, node);
+				// debug("%cSlickdeals+ allowed%c iframe", colors[0], colors.iframe, node.src, CLONE(isAds.result), node);
 			}
 			else if (node instanceof HTMLScriptElement)
 			{
@@ -846,15 +870,15 @@ const noAds = (() =>
 				const textContent = node.textContent;
 				if (isAds(url, textContent))
 				{
-					debug("%cSlickdeals+ blocked%c script" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.script, url, textContent, isAds.result);
+					debug("%cSlickdeals+ blocked%c script" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.script, url, textContent, CLONE(isAds.result));
 					node.remove();
 					continue;
 				}
-				// debug("%cSlickdeals+ allowed%c script", colors[0], colors.script, url, textContent, isAds.result);
+				// debug("%cSlickdeals+ allowed%c script", colors[0], colors.script, url, textContent, CLONE(isAds.result));
 			}
 			else if ((node instanceof HTMLLinkElement || node instanceof HTMLImageElement) && node.href && isAds(node.href))
 			{
-				debug("%cSlickdeals+ blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.tracker, node.href, isAds.result, node);
+				debug("%cSlickdeals+ blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.tracker, node.href, CLONE(isAds.result), node);
 				node.remove();
 				continue;
 			}
@@ -1185,7 +1209,7 @@ const highlightCards = node =>
 			".ratingCol.stats>.num," + //search result
 			".ratingCol>.ratingNum" //search result
 		);
-		if (elVotes && elVotes.textContent !== "")
+		if (elVotes?.textContent !== "")
 		{
 			const votes = Number.parseInt(elVotes.textContent);
 			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
@@ -2398,11 +2422,6 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid l
 	vertical-align: middle;
 }
 
-.sdp-menu .reset:hover
-{
-	opacity: 1;
-}
-
 .sdp-menu input[type="_color"],
 .sdp-menu input[type="color"]
 {
@@ -2491,7 +2510,6 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID
 {
 	height: auto;
 	margin-top: 0;
-	opacity: 0.5;
 	text-align: right;
 }
 
@@ -2527,6 +2545,13 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mob
 	font-size: x-small;
 	opacity: 0.5;
 	vertical-align: unset;
+}
+
+.sdp-menu input[type="checkbox"]:checked + label.footer::before, /* mobile */
+.sdp-menu input[type="checkbox"]:checked + label.footer::after, /* mobile */
+.sdp-menu .reset:hover
+{
+	opacity: 1;
 }
 
 .sdp-menu .footer::after
