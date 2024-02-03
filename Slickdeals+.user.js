@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      23.12.23-053323
+// @version      24.2.3-160635
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,9 +13,7 @@
 {
 "use strict";
 
-const CHANGES = `* use optional chaining
-* better visibility of changes log header
-* relaxed ad-blocking by allowing \`google\` in url and block \`google.com\` instead`;
+const CHANGES = `+ option to show price before title`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -104,6 +102,11 @@ const SETTINGS = (() =>
 			type: "color",
 			description: sColor,
 			onChange: () => setColors()
+		},
+		priceFirst: {
+			default: 0,
+			name: "Price first",
+			description: "Show price before title",
 		},
 		showDiff: {
 			default: 1,
@@ -1762,6 +1765,7 @@ const initMenu = elNav =>
 		elMenuItem.dataset.loading = loading;
 	}
 	elUl.append(elMenuItem);
+	elUl.append(createMenuItem("priceFirst"));
 	elUl.append(createMenuItem("showDiff"));
 	// elUl.append(createMenuItem("diffOnly"));
 	const elHighlightDiff = createMenuItem("highlightDiff", {labelAfter: "%"});
@@ -2774,21 +2778,122 @@ html.showDiff .bp-p-dealCard_priceContainer[data-deal-diff]::after /* mobile */
 	padding-left: 8px;
 }
 
-body[data-view="mobile"] .dealCard__content[data-v-ID], /* mobile firefox */
-body[data-view="mobile"] .dealCard--mini .dealCard__content[data-v-ID]  /* mobile */
+.dealCard--priceTitleVariant .dealCard__content[data-v-ID]
 {
-	grid-template-rows:auto 67px auto 1fr 20px;
+	grid-template-areas:
+		"image      image          image"
+		"title      title          title"
+		"price      originalPrice  fireIcon"
+		"extraInfo  extraInfo      extraInfo"
+		"store      store          store";
+	grid-template-rows: auto 2.5em auto 1fr 20px;
 }
 
+html.priceFirst .dealCard__content[data-v-ID],
+html.priceFirst .dealCard--priceTitleVariant .dealCard__content[data-v-ID]
+{
+	grid-template-areas:
+		"image      image          image"
+		"price      originalPrice  fireIcon"
+		"title      title          title"
+		"extraInfo  extraInfo      extraInfo"
+		"store      store          store";
+	grid-template-rows: auto 1.5em auto 1fr 20px;
+}
+
+html.priceFirst.showDiff .dealCard__content[data-v-ID],
+html.priceFirst.showDiff .dealCard--priceTitleVariant .dealCard__content[data-v-ID]
+{
+	grid-template-rows: auto 3em auto 1fr 20px;
+}
+
+html.priceFirst.showDiff body[data-view="mobile"] .dealCard__content[data-v-ID], /* mobile firefox */
+html.priceFirst.showDiff body[data-view="mobile"] .dealCard--mini .dealCard__content[data-v-ID]  /* mobile */
+{
+	grid-template-rows: auto 2.5em auto 1fr 20px;
+}
+
+html:not(.priceFirst) .blueprint .bp-p-socialDealCard--priceTitleVariant
+{
+	grid-template-areas:
+		"image  title     title          title title title"
+		"image  fireIcon  originalPrice  price price price"
+		"image  info      info           info info info"
+		"image  icons     icons          icons icons icons";
+}
 
 @media (width >= 768px)
 {
 	.dealCard__content[data-v-ID],
+	.dealCard--priceTitleVariant .dealCard__content[data-v-ID],
 	.blueprint .bp-p-socialDealCard .bp-c-card_content /* mobile */
  	{
-		grid-template-rows:auto 67px auto 1fr 20px;
+		grid-template-rows:auto 4.5em auto 1fr 20px;
 	}
+
+	.blueberry .bp-p-blueberryDealCard .bp-c-card_content
+	{
+		grid-template:
+			"image image image image image" auto
+			". title title title ." auto
+			". price originalPrice fireIcon ." auto
+			". store store store ." 1fr
+			". timeSensitivityBadge timeSensitivityBadge timeSensitivityBadge ." 1fr
+			". whowhen whowhen whowhen ." auto/8px auto auto 1fr 8px;
+	}
+
+	html.priceFirst .blueberry .bp-p-blueberryDealCard .bp-c-card_content
+	{
+		grid-template:
+			"image image image image image" auto
+			". price originalPrice fireIcon ." auto
+			". title title title ." auto
+			". store store store ." 1fr
+			". timeSensitivityBadge timeSensitivityBadge timeSensitivityBadge ." 1fr
+			". whowhen whowhen whowhen ." auto/8px auto auto 1fr 8px;
+	}
+
+	html.priceFirst .blueprint .bp-p-socialDealCard .bp-c-card_content
+	{
+		grid-template-areas:
+			"image      image          image"
+			"price      originalPrice  fireIcon"
+			"title      title          title"
+			"extraInfo  extraInfo      extraInfo"
+			"store      store          store";
+		grid-template-rows:auto 2.5em auto 1fr 20px;
+	}
+
 }
+
+@media (width < 768px)
+{
+	.blueberry .bp-p-blueberryDealCard--priceTitleVariant
+	{
+		grid-template:
+			"image . title title title ." auto
+			"image . price   originalPrice fireIcon ." auto
+			"image . store   store         store ." auto
+			"image . timeSensitivityBadge  timeSensitivityBadge   timeSensitivityBadge ." auto
+			"image . whowhen whowhen       whowhen ." 1fr
+			"image . footer  footer        footer ." auto
+			"extraFooter extraFooter extraFooter extraFooter extraFooter extraFooter" auto/118px 12px auto auto 1fr 12px;
+	}
+
+	html.priceFirst .blueberry .bp-p-blueberryDealCard--priceTitleVariant
+	{
+		grid-template:
+			"image . price   originalPrice fireIcon ." auto
+			"image . title title title ." auto
+			"image . store   store         store ." auto
+			"image . timeSensitivityBadge  timeSensitivityBadge   timeSensitivityBadge ." auto
+			"image . whowhen whowhen       whowhen ." 1fr
+			"image . footer  footer        footer ." auto
+			"extraFooter extraFooter extraFooter extraFooter extraFooter extraFooter" auto/118px 12px auto auto 1fr 12px;
+	}
+	
+}
+
 
 .pageContent--reserveAnnouncementBar
 { /* top banner */
