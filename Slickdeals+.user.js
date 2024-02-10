@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.2.3-160635
+// @version      24.2.10
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,7 +13,9 @@
 {
 "use strict";
 
-const CHANGES = `+ option to show price before title`;
+const CHANGES = `* don't hide next/prev buttons in carousel on first/last pages
+* version number simplified to a day, unless next version released in the same day
+! carousel buttons shown even when no items shown`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -2894,6 +2896,28 @@ html:not(.priceFirst) .blueprint .bp-p-socialDealCard--priceTitleVariant
 	
 }
 
+/* carousel height */
+.carousel__track
+{
+	margin: 0;
+}
+
+.carousel
+{
+	overflow: hidden;
+}
+
+.frontpageRecommendationCarousel[data-v-ID]
+{
+	min-height: unset;
+}
+
+/* always show carousel's buttons */
+.baseCarousel[data-v-ID] .carousel__prev--disabled,
+.baseCarousel[data-v-ID] .carousel__next--disabled
+{
+	display: flex;
+}
 
 .pageContent--reserveAnnouncementBar
 { /* top banner */
