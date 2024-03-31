@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.2.10
+// @version      24.3.24
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,9 +13,7 @@
 {
 "use strict";
 
-const CHANGES = `* don't hide next/prev buttons in carousel on first/last pages
-* version number simplified to a day, unless next version released in the same day
-! carousel buttons shown even when no items shown`;
+const CHANGES = `* fixed extra space on top`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -2919,6 +2917,7 @@ html:not(.priceFirst) .blueprint .bp-p-socialDealCard--priceTitleVariant
 	display: flex;
 }
 
+.pageContent--reserveMegabanner,
 .pageContent--reserveAnnouncementBar
 { /* top banner */
 	padding-top: 0 !important;
