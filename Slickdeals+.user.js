@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.3.24
+// @version      24.6.22
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,7 +13,7 @@
 {
 "use strict";
 
-const CHANGES = `* fixed extra space on top`;
+const CHANGES = `! Script fails if a card doesn't have votes count`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -1212,9 +1212,9 @@ const highlightCards = node =>
 			".ratingCol.stats>.num," + //search result
 			".ratingCol>.ratingNum" //search result
 		);
-		if (elVotes?.textContent !== "")
+		if (elVotes && elVotes.textContent !== "")
 		{
-			const votes = Number.parseInt(elVotes.textContent);
+			const votes = Number.parseInt(elVotes.textContent || 0);
 			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
 		}
 		if (elCard.dataset.dealPercent)
