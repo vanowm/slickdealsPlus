@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.6.22
+// @version      24.7.5
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,7 +13,9 @@
 {
 "use strict";
 
-const CHANGES = `! Script fails if a card doesn't have votes count`;
+const CHANGES = `* fixed extra space on top
+* removed extra white spaces from source
+! ad-block kills pagination`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -478,8 +480,8 @@ const noAds = (() =>
 					debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c " + name,
 						colors[~~blocked],
 						colors[(this.tagName.toLowerCase() || "") + name],
-						value,
 						CLONE(isAds.result),
+						value,
 						this);
 
 					this.remove();
@@ -514,8 +516,8 @@ const noAds = (() =>
 			debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c fetch",
 				colors[~~blocked],
 				colors.fetch,
+				CLONE(isAds.result),
 				args,
-				CLONE(isAds.result)
 			);
 
 			return Promise.resolve(new Response("", {status: 403, statusText: "Blocked"}));
@@ -534,8 +536,8 @@ const noAds = (() =>
 			debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c XHR",
 				colors[~~blocked],
 				colors.xhr,
+				CLONE(isAds.result),
 				args,
-				CLONE(isAds.result)
 			);
 
 			this.send = this.abort;
@@ -574,8 +576,8 @@ const noAds = (() =>
 						debug(debugPrefix + (blocked ? "blocked" : "allowed") + " %c" + (isSource ? this.tagName.toLowerCase() + " " : "") + name,
 							colors[~~blocked],
 							colors[(name === "src" ? this.tagName.toLowerCase() : "") + name],
-							value,
 							CLONE(isAds.result),
+							value,
 							this
 						);
 
@@ -616,9 +618,9 @@ const noAds = (() =>
 					debug(debugPrefix + (blocked ? "blocked" : "allowed") + "%c DOM_" + name,
 						colors[~~blocked],
 						colors.dom,
+						CLONE(isAds.result),
 						node,
 						this,
-						CLONE(isAds.result)
 					);
 					node.remove();
 					args.splice(i--, 1);
@@ -681,6 +683,7 @@ const noAds = (() =>
 		],
 		allowUrl: [
 			/google\.com\/recaptcha\//,
+			/fonts\.googleapis\.com/,
 			// /accounts\.google\.com\//
 		],
 		allowText: [
@@ -731,7 +734,7 @@ const noAds = (() =>
 			/heapanalytics/,
 			/demdex/,
 			/\.geq/,
-			/hydration/,
+			// /hydration/, //kills pagination
 			/qualtrics/,
 			/adsrvr\./,
 			/announcementBar/ //top banner
@@ -861,11 +864,17 @@ const noAds = (() =>
 			{
 				if (node.src && isAds(node.src))
 				{
-					debug("%cSlickdeals+ blocked%c iframe" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.iframe, node.src, CLONE(isAds.result), node);
+					debug(debugPrefix + "blocked%c iframe" + (isAds.result.type === "blockText" ? "" : " src"),
+						colors[1],
+						colors.iframe,
+						CLONE(isAds.result),
+						node.src,
+						node
+					);
 					node.remove();
 					continue;
 				}
-				// debug("%cSlickdeals+ allowed%c iframe", colors[0], colors.iframe, node.src, CLONE(isAds.result), node);
+				// debug(debugPrefix + "allowed%c iframe", colors[0], colors.iframe, node.src, CLONE(isAds.result), node);
 			}
 			else if (node instanceof HTMLScriptElement)
 			{
@@ -873,15 +882,27 @@ const noAds = (() =>
 				const textContent = node.textContent;
 				if (isAds(url, textContent))
 				{
-					debug("%cSlickdeals+ blocked%c script" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.script, url, textContent, CLONE(isAds.result));
+					debug(debugPrefix + "blocked%c script" + (isAds.result.type === "blockText" ? "" : " src"),
+						colors[1],
+						colors.script,
+						CLONE(isAds.result),
+						url,
+						textContent,
+					);
 					node.remove();
 					continue;
 				}
-				// debug("%cSlickdeals+ allowed%c script", colors[0], colors.script, url, textContent, CLONE(isAds.result));
+				// debug(debugPrefix + "allowed%c script", colors[0], colors.script, url, textContent, CLONE(isAds.result));
 			}
 			else if ((node instanceof HTMLLinkElement || node instanceof HTMLImageElement) && node.href && isAds(node.href))
 			{
-				debug("%cSlickdeals+ blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"), colors[1], colors.tracker, node.href, CLONE(isAds.result), node);
+				debug(debugPrefix + "blocked%c tracker" + (isAds.result.type === "blockText" ? "" : " src"),
+					colors[1],
+					colors.tracker,
+					CLONE(isAds.result),
+					node.href,
+					node
+				);
 				node.remove();
 				continue;
 			}
@@ -1459,7 +1480,7 @@ const getUrlInfo = (() =>
 {
 	const ids = ["pno", "tid", "sdtid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
 	const queryConvert = {
-		sdtid : "tid"
+		// sdtid : "tid"
 	};
 	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
 	return url =>
@@ -2279,7 +2300,7 @@ html.freeOnly .frontpageGrid li:not(.free),
 
 html.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff),
 html.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff),
-html.diffOnly.highlightDiff .deals li:not(.highlightDiff), /* mobile */	
+html.diffOnly.highlightDiff .deals li:not(.highlightDiff), /* mobile */
 html.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff), /* mobile */
 html.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
 html.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff), /* https://slickdeals.net/deals/*** */
@@ -2520,7 +2541,7 @@ body[data-view="mobile"] .sdp-menu .slickdealsHeaderDropdownItem__link[data-v-ID
 body.colorClose .slickdealsHeader__dropdown[data-v-ID],
 body.colorClose .slickdealsHeader__mainNav[data-v-ID]
 {
-	transform: initial !important;	
+	transform: initial !important;
 }
 
 body[data-view="mobile"] .sdp-menu .slickdealsHeader__dropdown[data-v-ID] /* mobile */
@@ -2891,7 +2912,7 @@ html:not(.priceFirst) .blueprint .bp-p-socialDealCard--priceTitleVariant
 			"image . footer  footer        footer ." auto
 			"extraFooter extraFooter extraFooter extraFooter extraFooter extraFooter" auto/118px 12px auto auto 1fr 12px;
 	}
-	
+
 }
 
 /* carousel height */
