@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.7.5
+// @version      24.7.7
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -12,10 +12,8 @@
 ((css, api) =>
 {
 "use strict";
-
-const CHANGES = `* fixed extra space on top
-* removed extra white spaces from source
-! ad-block kills pagination`;
+console.log("Slickdeals+ starting");
+const CHANGES = `! Menu sometimes not shown`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
@@ -286,17 +284,6 @@ const SETTINGS = (() =>
 	 */
 	const settingsGetData = key => new Proxy(defaultSettings, {
 		get: (target, name) => Reflect.get(target[name], key),
-		set: () => true, //read-only
-	});
-
-	/**
-	 * Returns a read-only proxy object that retrieves the value of a specific key from the default settings object.
-	 *
-	 * @param {string} key - The key to retrieve from the default settings object.
-	 * @returns {Object} - A read-only proxy object that retrieves the value of the specified key from the default settings object.
-	 */
-	const linksGetData = () => new Proxy(links, {
-		get: (target, name) => target.get(name),
 		set: () => true, //read-only
 	});
 
@@ -926,61 +913,6 @@ const noAds = (() =>
 })();
 noAds(document);
 
-// html.freeOnly .frontpageRecommendationCarousel li:not(.free),
-// html.freeOnly .dealTiles li:not(.free),
-// html.freeOnly .categoryPage__main li:not(.free), /* https://slickdeals.net/deals/*** */
-// html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
-// html.freeOnly .frontpageGrid li:not(.free),
-
-// {
-// 	const cardsList = [
-// 		".frontpageRecommendationCarousel li",
-// 		".dealTiles li",
-// 		".categoryPage__main li",
-// 		".bp-p-categoryPage_main li",
-// 		".frontpageGrid li"
-// 	];
-// 	const settingsList = [".freeOnly", ".ratingOnly.highlightRating", ".diffOnly.highlightDff"];
-// 	const result = [];
-// 	const notList = [];
-
-// 	const getCombinations = valuesArray =>
-// 	{
-
-// 		const combi = [];
-// 		let temporary = [];
-// 		const slent = Math.pow(2, valuesArray.length);
-
-// 		for (let i = 0; i < slent; i++)
-// 		{
-// 			temporary = [];
-// 			for (let j = 0; j < valuesArray.length; j++)
-// 			{
-// 				if ((i & Math.pow(2, j)))
-// 				{
-// 					temporary.push(valuesArray[j]);
-// 				}
-// 			}
-// 			if (temporary.length > 0)
-// 			{
-// 				combi.push(temporary);
-// 			}
-// 		}
-
-// 		combi.sort((a, b) => a.length - b.length);
-// 		console.log(combi.join("\n"));
-// 		return combi;
-// 	};
-// 	console.log(getCombinations(settingsList));
-// 	for(let i = 0; i < cardsList.length; i++)
-// 	{
-// 		for(let j = 0; j < settingsList.length; j++)
-// 		{
-
-// 		}
-// 	}
-// }
-
 const style = document.createElement("style");
 style.innerHTML = css;
 if (document.head)
@@ -995,527 +927,16 @@ if (document.head)
 /*------------[ end ad blocking ]------------*/
 
 /**
- * MutationObserver callback function that tracks changes in the DOM.
- * @function
- * @param {MutationRecord[]} mutations - An array of MutationRecord objects representing the changes in the DOM.
- */
-new MutationObserver(mutations =>
-{
-	for (let i = 0; i < mutations.length; i++)
-	{
-		for (let n = 0; n < mutations[i].addedNodes.length; n++)
-		{
-			const node = mutations[i].addedNodes[n];
-
-			if (!node.classList)
-				continue;
-
-			// remove ads
-			if (SETTINGS.noAds && !node.closest(".dealCard"))
-				noAds(node);
-
-			//have we already processed this node?
-			if (node.classList.contains(processedMarker))
-				continue;
-
-			// create menu and attach to the header
-			if (node.matches(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection"))
-			{
-				initMenu(node);
-				continue;
-			}
-			processCards(node);
-			processLinks(node);
-		}
-		// for some reason attached menu is being removed...reattach it back if necessary
-		for(let n = 0; n < mutations[i].removedNodes.length; n++)
-		{
-			if (mutations[i].removedNodes[n] === initMenu.elMenu)
-				initMenu.elHeader.append(initMenu.elMenu);
-
-		}
-	}
-}).observe(document, {
-	subtree: true,
-	childList: true
-});
-
-/**
- * Returns the first element that is a descendant of node that matches selectors.
- * @function
- * @param {string} id - The ID of the element to find.
- * @param {HTMLElement} node - The root node to search for the element.
- * @param {boolean} all - Whether to return all elements that match the selector.
- * @returns {HTMLElement|NodeList} The first element that matches the selector, or a NodeList of all elements that match the selector.
- */
-const $$ = (id, node, all) =>
-{
-	try
-	{
-		if (!node)
-			node = document;
-
-		if (!all && /\w/.test(id[0]))
-			return node.getElementById(id);
-
-		if (all)
-			return node.querySelectorAll(id);
-
-		return node.querySelector(id);
-	}
-	catch
-	{}
-};
-
-/**
- * Converts input into a string and trims whitespace.
- * @function
- * @param {string} t - The string to trim.
- * @returns {string} The trimmed string.
- */
-const trim = t => ("" + t).trim();
-
-/**
- * Divides a price by a specified divider and formats it as a string with a dollar sign and two decimal places.
- * @function
- * @param {string} _text - The text to prepend to the formatted price.
- * @param {string} divider - The value to divide the price by.
- * @param {string} price - The price to divide and format.
- * @returns {string} The formatted price with the specified text prepended to it.
- */
-const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.replace(/,/g, "") / Number.parseFloat(divider))).toFixed(2);
-
-/**
- * Extracts pricing information from a given node and its children.
- * @function
- * @param {HTMLElement|NodeList} node - The root node or NodeList to search for pricing information.
- * @param {boolean} [force=false] - Whether to force processing of already processed items.
- * @returns void
- */
-const processCards = (node, force) =>
-{
-	const processed = force ? "" : ":not(." + processedMarker + ")";
-	const nlItems = node instanceof NodeList
-		? node
-		: $$(	`.salePrice${processed},` +
-				`.itemPrice${processed},` +
-				`.price${processed},` + //search
-				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
-				`.dealCard__price${processed},` +
-				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
-				`.dealPrice${processed}`
-		, node, true) || [];
-
-	if (nlItems.length === 0)
-		return;
-
-	const rePrice = /^[\s\w]*~?\$/;
-	const rePriceFrom = /^(?:from\s)?(\d+)\sfor\s\$?([\d,.]+)/g;
-	const rePriceCommas = /,/g;
-	const rePriceTrim = /[\s\w]*~?\$([\d,.]+)(?:\s.*)?/;
-	const rePriceFree = /free/;
-	const rePricePrice = /^[\s\w]*~?\$([\d,.]+)/;
-	const rePriceOff = /(?:\$?([\d,.]+))?\soff(?:\s\$?([\d,.]+))?$/;
-	for (let i = 0; i < nlItems.length; i++)
-	{
-		const elPrice = nlItems[i];
-		elPrice.title = elPrice.textContent;
-		let elParent = elPrice.parentNode;
-		const price = trim(elPrice.textContent).toLowerCase();
-		let priceNew = Number.NaN;
-		if (price)
-		{
-			if (price === "free")
-				priceNew = 0;
-			else if (rePrice.test(price))
-			{
-				priceNew = Number.parseFloat(price
-					.replace(rePriceFrom, priceDivide) // 2 for $10
-					.replace(rePriceTrim, "$1") // remove everything after first number ($xx off $yy)
-					.replace(rePriceCommas, "")); // remove commas
-			}
-
-		}
-		const elPriceRetail = $$(".retailPrice", elParent);
-		const elPriceOld = $$(".oldListPrice, .dealCard__originalPrice, .bp-p-dealCard_originalPrice, .dealDetailsMainDesktopBlock__listPrice", elParent);
-		// make sure price element is in it's own wrapper
-		if (elParent.matches(".bp-c-card_content, .dealDetailsPriceInfo"))
-		{
-			const elWrapper = document.createElement("div");
-			elWrapper.className = "cardPriceInfo";
-			elWrapper.append(elPrice);
-			if (elPriceOld)
-				elWrapper.append(elPriceOld);
-
-			if (elPriceRetail)
-				elWrapper.append(elPriceRetail);
-
-			elParent.prepend(elWrapper);
-			elParent = elWrapper;
-		}
-		const priceRetail = Number.parseFloat(trim((elPriceRetail || {}).textContent)
-			.replace(rePricePrice, "$1")
-			.replace(rePriceCommas, ""));
-
-		const priceOld = Number.parseFloat(trim((elPriceOld || {}).textContent)
-			.replace(rePricePrice, "$1")
-			.replace(rePriceCommas, ""));
-
-		const off = price.match(rePriceOff);
-		const priceOrig = Number.parseFloat(off && off[2]);
-		const priceBase = priceRetail || priceOld || priceOrig;
-		if (priceBase && off)
-			priceNew = priceBase - priceNew;
-
-		const priceFree = price && price.match(rePriceFree) || priceNew === 0;
-		const priceDifference = priceBase - priceNew;
-		const priceDealPercent = Math.round(priceDifference * 100 / priceBase);
-		const elCard = elParent.closest(
-			"li," +
-			"div[data-type='fpdeal']," +
-			"div.resultRow," +
-			"div[data-role='frontpageDealContent']"
-		);
-
-		if (!Number.isNaN(priceDealPercent))
-		{
-			const diff = priceDifference.toFixed(2).replace(/\.00$/, "");
-			elParent.dataset.dealDiff = diff;
-			elParent.dataset.dealPercent = priceDealPercent;
-			if (elCard)
-			{
-				elCard.dataset.dealDiff = diff;
-				elCard.dataset.dealPercent = priceDealPercent;
-			}
-			elParent.title = "Save $" + diff + " (" + priceDealPercent + "%)";
-		}
-		elPrice.classList.add(processedMarker);
-
-		if (elCard)
-		{
-			elCard.classList.toggle("free", priceFree);
-			highlightCards(elCard);
-		}
-	}
-};
-
-/**
- * Highlights the cards with a certain number of votes.
- * @function
- * @param {NodeList|Element} node - The node or NodeList to search for cards.
- * @returns {void}
- */
-const highlightCards = node =>
-{
-	let nlItems;
-	if (node instanceof NodeList)
-		nlItems = node;
-	else if (node instanceof Element)
-		nlItems = [node];
-	else
-		nlItems = $$(	"li.frontpageGrid__feedItem," + //front page
-						"li.carousel__slide," + // front page carousel
-						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
-						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
-						"div.resultRow" //search result
-		, node, true);
-
-	if (nlItems.length === 0)
-		return;
-
-	const highlightDiff = SETTINGS.highlightDiff;
-	for(let i = 0; i < nlItems.length; i++)
-	{
-		const elCard = nlItems[i];
-		const elVotes = elCard.querySelector(
-			".dealCardSocialControls__voteCount," + //front page
-			".bp-p-votingThumbsPopup_voteCount," + // https://slickdeals.net/deals/watches/
-			".ratingCol.stats>.num," + //search result
-			".ratingCol>.ratingNum" //search result
-		);
-		if (elVotes && elVotes.textContent !== "")
-		{
-			const votes = Number.parseInt(elVotes.textContent || 0);
-			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
-		}
-		if (elCard.dataset.dealPercent)
-		{
-			const dealPercent = ~~elCard.dataset.dealPercent;
-			elCard.classList.toggle("highlightDiff", highlightDiff && dealPercent >= highlightDiff);
-		}
-	}
-};
-
-/**
- * Set dataset values to multiple elements at once.
- *
- * @type {Proxy}
- */
-const datasets = new Proxy([document.documentElement.dataset], {
-	get: (target, property) => (property === "__target" ? target : target[0][property]),
-	set: (target, property, value) =>
-	{
-		for(let i = 0; i < target.length; i++)
-			target[i][property] = value;
-
-		return true;
-	},
-	deleteProperty: (target, property) =>
-	{
-		for(let i = 0; i < target.length; i++)
-		{
-			if (property in target[i])
-				delete target[i][property];
-		}
-
-		return true;
-	}
-});
-
-/**
- * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
- * @function
- * @param {HTMLElement|NodeList} node - The root node or NodeList to search for links to fix.
- * @param {boolean} [force=false] - Whether to force processing of already processed links.
- * @returns {void}
- */
-const processLinks = (node, force) =>
-{
-	const processed = force ? "" : ":not(." + processedMarker + ")";
-	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not([href=""])${processed}:not(.overlayUrl)`, node, true) || [];
-	for(let i = 0; i < nlLinks.length; i++)
-	{
-		const elLink = nlLinks[i];
-
-		if (!elLink.href || (elLink._hrefResolved && !force))
-			continue;
-
-		elLink.classList.add(processedMarker);
-		const {id, type} = getUrlInfo(elLink.href) || {};
-		if (!id)
-			continue;
-
-		if (!elLink._hrefOrig)
-		{
-			elLink._hrefOrig = elLink.href;
-			const elHover = document.createElement("a");
-			elHover.href = elLink._hrefOrig;
-			elHover.classList.add(processedMarker, "overlayUrl", "hidden");
-			elHover.title = "Original link";
-			elHover.target = elLink.target;
-			elLink.append(elHover);
-		}
-		const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
-		let url = u2 ? decodeURIComponent(u2[1]) : SETTINGS(id + type);
-
-		const aLinks = linksData[id] || [elLink];
-		const isInited = aLinks.resolved !== undefined;
-		if (isInited)
-		{
-			if (!aLinks.includes(elLink))
-				aLinks.push(elLink);
-		}
-		else
-		{
-			aLinks.resolved = false;
-			linksData[id] = aLinks;
-		}
-
-		// if (!elLink._hrefResolved)
-		// {
-		// 	elLink.classList.add("alert");
-		// }
-		if (url)
-		{
-			if (Array.isArray(url))
-				url = url[0];
-
-			aLinks.resolved = true;
-			linkUpdate(elLink, url, force);
-			continue;
-		}
-		if (isInited && !force)
-			return;
-
-		elLink.classList.add("notResolved");
-		if (!SETTINGS.resolveLinks)
-			return;
-
-		if (datasets.loading === undefined)
-			datasets.loading = 0;
-
-		datasets.loading++;
-
-		/**
-		 * Resolves a URL
-		 * @function
-		 * @param {string} id - The ID of the deal to resolve.
-		 * @param {string} type - The type of the deal to resolve.
-		 * @param {string} url - The URL to resolve.
-		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
-		 */
-		resolveUrl(id, type, elLink._hrefOrig)
-			.then(response =>
-			{
-				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : ""));
-
-				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(id + type);
-				const r = new Uint8Array(response.length)
-					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
-
-				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
-				try
-				{
-					if (!/^https?:\/\//.test(response))
-						return;
-
-					SETTINGS(id + type, response);
-					for(let i = 0; i < aLinks.length; i++)
-						linkUpdate(aLinks[i], response);
-
-					aLinks.resolved = true;
-				}
-				catch{}
-				return response;
-			})
-			.finally(() =>
-			{
-				if (!--datasets.loading)
-					delete datasets.loading;
-
-			})
-			.catch(console.error);
-	}
-};
-
-/**
- * Updates a link with a new URL and styling to indicate that it has been resolved.
- * @function
- * @param {HTMLAnchorElement} elA - The link to update.
- * @param {string} url - The new URL to set on the link.
- * @returns {void}
- */
-const linkUpdate = (elA, url, update) =>
-{
-	// elA.classList.remove("alert");
-	if (elA._hrefResolved && !update)
-		return;
-
-	if (url)
-		elA._hrefResolved = url;
-
-	elA.classList.toggle("notResolved", !elA._hrefResolved);
-	const elHover = elA.querySelector("a.overlayUrl");
-	if (SETTINGS.resolveLinks && elA._hrefResolved)
-	{
-		if (elHover)
-		{
-			elHover.title = "Original link";
-			elHover.href = elA._hrefOrig;
-			elHover.classList.remove("hidden");
-		}
-		elA.href = elA._hrefResolved;
-		elA.classList.add("resolved");
-		elA.classList.remove("tracked");
-	}
-	else
-	{
-		if (elHover)
-		{
-			elHover.classList.toggle("hidden", !elA._hrefResolved);
-			elHover.title = "Resolved link";
-			elHover.href = elA._hrefResolved;
-		}
-		elA.href = elA._hrefOrig;
-		elA.classList.add("tracked");
-		elA.classList.remove("resolved");
-	}
-	// a.title = a._hrefResolved;
-};
-
-/**
- * Updates links on the page based on the current settings.
- * If resolveLinks is enabled, it processes all unresolved links on the page.
- * Otherwise, it updates all links in the linksData object.
- */
-const updateLinks = () =>
-{
-	if (SETTINGS.resolveLinks)
-	{
-		const nlList = $$(".notResolved", document.body, true);
-		if (nlList.length > 0)
-			processLinks(nlList, true);
-	}
-	for(const id in linksData)
-	{
-		const aLinks = linksData[id];
-		for(let i = 0; i < aLinks.length; i++)
-		{
-			linkUpdate(aLinks[i], undefined, true);
-		}
-	}
-};
-
-/**
- * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
- * @function
- * @param {string} id - The ID of the deal to resolve.
- * @param {string} type - The type of the deal to resolve.
- * @param {string} url - The URL to resolve.
- * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
- */
-const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
-	.then(r => r && r.ok && r.arrayBuffer() || r)
-	.catch(fVoid);
-
-/**
-* Extracts the ID and type of a deal from a given URL.
- * @function
- * @param {string} url - The URL to parse.
- * @returns {Object|boolean} - An object containing the ID and type of the resource, or false if no ID was found.
- */
-const getUrlInfo = (() =>
-{
-	const ids = ["pno", "tid", "sdtid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
-	const queryConvert = {
-		// sdtid : "tid"
-	};
-	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
-	return url =>
-	{
-		if (new URL(url).hostname !== "slickdeals.net")
-			return false;
-
-		let type;
-		let id;
-		for (let i = 0; i < ids.length; i++)
-		{
-			[, type, id] = ids[i].exec(url) || [];
-			if (id !== undefined)
-				break;
-		}
-		if (type === undefined)
-			return false;
-
-		type = queryConvert[type] || type;
-
-		const matchLNO = reLno.exec(url);
-		if (matchLNO)
-			id += "-" + matchLNO[1];
-
-		return {id, type};
-	};
-})();
-
-/**
  * Initializes the Slickdeals+ menu.
  * @function
  * @param {HTMLElement} elNav - The navigation element to use as the menu container.
  */
 const initMenu = elNav =>
 {
+	if (initMenu._inited)
+		return;
+
+	initMenu._inited = true;
 	if (elNav.children.length < 4 && --initMenu.counter)
 		return setTimeout(() => initMenu(elNav), 0);
 
@@ -1886,6 +1307,525 @@ const initMenu = elNav =>
 		}, false);
 };
 initMenu.counter = 1000;
+
+/**
+ * Set dataset values to multiple elements at once.
+ *
+ * @type {Proxy}
+ */
+const datasets = new Proxy([document.documentElement.dataset], {
+	get: (target, property) => (property === "__target" ? target : target[0][property]),
+	set: (target, property, value) =>
+	{
+		for(let i = 0; i < target.length; i++)
+			target[i][property] = value;
+
+		return true;
+	},
+	deleteProperty: (target, property) =>
+	{
+		for(let i = 0; i < target.length; i++)
+		{
+			if (property in target[i])
+				delete target[i][property];
+		}
+
+		return true;
+	}
+});
+
+/**
+ * Returns the first element that is a descendant of node that matches selectors.
+ * @function
+ * @param {string} id - The ID of the element to find.
+ * @param {HTMLElement} node - The root node to search for the element.
+ * @param {boolean} all - Whether to return all elements that match the selector.
+ * @returns {HTMLElement|NodeList} The first element that matches the selector, or a NodeList of all elements that match the selector.
+ */
+const $$ = (id, node, all) =>
+{
+	try
+	{
+		if (!node)
+			node = document;
+
+		if (!all && /\w/.test(id[0]))
+			return node.getElementById(id);
+
+		if (all)
+			return node.querySelectorAll(id);
+
+		return node.querySelector(id);
+	}
+	catch
+	{}
+};
+
+/**
+ * Converts input into a string and trims whitespace.
+ * @function
+ * @param {string} t - The string to trim.
+ * @returns {string} The trimmed string.
+ */
+const trim = t => ("" + t).trim();
+
+const elMenu = document.querySelector(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
+if (elMenu)
+	initMenu(elMenu);
+
+/**
+ * MutationObserver callback function that tracks changes in the DOM.
+ * @function
+ * @param {MutationRecord[]} mutations - An array of MutationRecord objects representing the changes in the DOM.
+ */
+new MutationObserver(mutations =>
+{
+	for (let i = 0; i < mutations.length; i++)
+	{
+		for (let n = 0; n < mutations[i].addedNodes.length; n++)
+		{
+			const node = mutations[i].addedNodes[n];
+
+			if (!node.classList)
+				continue;
+
+			// remove ads
+			if (SETTINGS.noAds && !node.closest(".dealCard"))
+				noAds(node);
+
+			//have we already processed this node?
+			if (node.classList.contains(processedMarker))
+				continue;
+
+			// create menu and attach to the header
+			if (node.matches(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection"))
+			{
+				initMenu(node);
+				continue;
+			}
+			processCards(node);
+			processLinks(node);
+		}
+		// for some reason attached menu is being removed...reattach it back if necessary
+		for(let n = 0; n < mutations[i].removedNodes.length; n++)
+		{
+			if (mutations[i].removedNodes[n] === initMenu.elMenu)
+				initMenu.elHeader.append(initMenu.elMenu);
+
+		}
+	}
+}).observe(document, {
+	subtree: true,
+	childList: true
+});
+
+/**
+ * Divides a price by a specified divider and formats it as a string with a dollar sign and two decimal places.
+ * @function
+ * @param {string} _text - The text to prepend to the formatted price.
+ * @param {string} divider - The value to divide the price by.
+ * @param {string} price - The price to divide and format.
+ * @returns {string} The formatted price with the specified text prepended to it.
+ */
+const priceDivide = (_text, divider, price) => "$" + (Number.parseFloat(price.replace(/,/g, "") / Number.parseFloat(divider))).toFixed(2);
+
+/**
+ * Extracts pricing information from a given node and its children.
+ * @function
+ * @param {HTMLElement|NodeList} node - The root node or NodeList to search for pricing information.
+ * @param {boolean} [force=false] - Whether to force processing of already processed items.
+ * @returns void
+ */
+const processCards = (node, force) =>
+{
+	const processed = force ? "" : ":not(." + processedMarker + ")";
+	const nlItems = node instanceof NodeList
+		? node
+		: $$(	`.salePrice${processed},` +
+				`.itemPrice${processed},` +
+				`.price${processed},` + //search
+				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
+				`.dealCard__price${processed},` +
+				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
+				`.dealPrice${processed}`
+		, node, true) || [];
+
+	if (nlItems.length === 0)
+		return;
+
+	const rePrice = /^[\s\w]*~?\$/;
+	const rePriceFrom = /^(?:from\s)?(\d+)\sfor\s\$?([\d,.]+)/g;
+	const rePriceCommas = /,/g;
+	const rePriceTrim = /[\s\w]*~?\$([\d,.]+)(?:\s.*)?/;
+	const rePriceFree = /free/;
+	const rePricePrice = /^[\s\w]*~?\$([\d,.]+)/;
+	const rePriceOff = /(?:\$?([\d,.]+))?\soff(?:\s\$?([\d,.]+))?$/;
+	for (let i = 0; i < nlItems.length; i++)
+	{
+		const elPrice = nlItems[i];
+		elPrice.title = elPrice.textContent;
+		let elParent = elPrice.parentNode;
+		const price = trim(elPrice.textContent).toLowerCase();
+		let priceNew = Number.NaN;
+		if (price)
+		{
+			if (price === "free")
+				priceNew = 0;
+			else if (rePrice.test(price))
+			{
+				priceNew = Number.parseFloat(price
+					.replace(rePriceFrom, priceDivide) // 2 for $10
+					.replace(rePriceTrim, "$1") // remove everything after first number ($xx off $yy)
+					.replace(rePriceCommas, "")); // remove commas
+			}
+
+		}
+		const elPriceRetail = $$(".retailPrice", elParent);
+		const elPriceOld = $$(".oldListPrice, .dealCard__originalPrice, .bp-p-dealCard_originalPrice, .dealDetailsMainDesktopBlock__listPrice", elParent);
+		// make sure price element is in it's own wrapper
+		if (elParent.matches(".bp-c-card_content, .dealDetailsPriceInfo"))
+		{
+			const elWrapper = document.createElement("div");
+			elWrapper.className = "cardPriceInfo";
+			elWrapper.append(elPrice);
+			if (elPriceOld)
+				elWrapper.append(elPriceOld);
+
+			if (elPriceRetail)
+				elWrapper.append(elPriceRetail);
+
+			elParent.prepend(elWrapper);
+			elParent = elWrapper;
+		}
+		const priceRetail = Number.parseFloat(trim((elPriceRetail || {}).textContent)
+			.replace(rePricePrice, "$1")
+			.replace(rePriceCommas, ""));
+
+		const priceOld = Number.parseFloat(trim((elPriceOld || {}).textContent)
+			.replace(rePricePrice, "$1")
+			.replace(rePriceCommas, ""));
+
+		const off = price.match(rePriceOff);
+		const priceOrig = Number.parseFloat(off && off[2]);
+		const priceBase = priceRetail || priceOld || priceOrig;
+		if (priceBase && off)
+			priceNew = priceBase - priceNew;
+
+		const priceFree = price && price.match(rePriceFree) || priceNew === 0;
+		const priceDifference = priceBase - priceNew;
+		const priceDealPercent = Math.round(priceDifference * 100 / priceBase);
+		const elCard = elParent.closest(
+			"li," +
+			"div[data-type='fpdeal']," +
+			"div.resultRow," +
+			"div[data-role='frontpageDealContent']"
+		);
+
+		if (!Number.isNaN(priceDealPercent))
+		{
+			const diff = priceDifference.toFixed(2).replace(/\.00$/, "");
+			elParent.dataset.dealDiff = diff;
+			elParent.dataset.dealPercent = priceDealPercent;
+			if (elCard)
+			{
+				elCard.dataset.dealDiff = diff;
+				elCard.dataset.dealPercent = priceDealPercent;
+			}
+			elParent.title = "Save $" + diff + " (" + priceDealPercent + "%)";
+		}
+		elPrice.classList.add(processedMarker);
+
+		if (elCard)
+		{
+			elCard.classList.toggle("free", priceFree);
+			highlightCards(elCard);
+		}
+	}
+};
+
+/**
+ * Highlights the cards with a certain number of votes.
+ * @function
+ * @param {NodeList|Element} node - The node or NodeList to search for cards.
+ * @returns {void}
+ */
+const highlightCards = node =>
+{
+	let nlItems;
+	if (node instanceof NodeList)
+		nlItems = node;
+	else if (node instanceof Element)
+		nlItems = [node];
+	else
+		nlItems = $$(	"li.frontpageGrid__feedItem," + //front page
+						"li.carousel__slide," + // front page carousel
+						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
+						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
+						"div.resultRow" //search result
+		, node, true);
+
+	if (nlItems.length === 0)
+		return;
+
+	const highlightDiff = SETTINGS.highlightDiff;
+	for(let i = 0; i < nlItems.length; i++)
+	{
+		const elCard = nlItems[i];
+		const elVotes = elCard.querySelector(
+			".dealCardSocialControls__voteCount," + //front page
+			".bp-p-votingThumbsPopup_voteCount," + // https://slickdeals.net/deals/watches/
+			".ratingCol.stats>.num," + //search result
+			".ratingCol>.ratingNum" //search result
+		);
+		if (elVotes && elVotes.textContent !== "")
+		{
+			const votes = Number.parseInt(elVotes.textContent || 0);
+			elCard.classList.toggle("highlightRating", SETTINGS.highlightRating && votes > 0 && votes >= SETTINGS.highlightRating);
+		}
+		if (elCard.dataset.dealPercent)
+		{
+			const dealPercent = ~~elCard.dataset.dealPercent;
+			elCard.classList.toggle("highlightDiff", highlightDiff && dealPercent >= highlightDiff);
+		}
+	}
+};
+
+/**
+ * Fixes links on a given node by replacing the href with a new URL based on the deal ID and type.
+ * @function
+ * @param {HTMLElement|NodeList} node - The root node or NodeList to search for links to fix.
+ * @param {boolean} [force=false] - Whether to force processing of already processed links.
+ * @returns {void}
+ */
+const processLinks = (node, force) =>
+{
+	const processed = force ? "" : ":not(." + processedMarker + ")";
+	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not([href=""])${processed}:not(.overlayUrl)`, node, true) || [];
+	for(let i = 0; i < nlLinks.length; i++)
+	{
+		const elLink = nlLinks[i];
+
+		if (!elLink.href || (elLink._hrefResolved && !force))
+			continue;
+
+		elLink.classList.add(processedMarker);
+		const {id, type} = getUrlInfo(elLink.href) || {};
+		if (!id)
+			continue;
+
+		if (!elLink._hrefOrig)
+		{
+			elLink._hrefOrig = elLink.href;
+			const elHover = document.createElement("a");
+			elHover.href = elLink._hrefOrig;
+			elHover.classList.add(processedMarker, "overlayUrl", "hidden");
+			elHover.title = "Original link";
+			elHover.target = elLink.target;
+			elLink.append(elHover);
+		}
+		const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
+		let url = u2 ? decodeURIComponent(u2[1]) : SETTINGS(id + type);
+
+		const aLinks = linksData[id] || [elLink];
+		const isInited = aLinks.resolved !== undefined;
+		if (isInited)
+		{
+			if (!aLinks.includes(elLink))
+				aLinks.push(elLink);
+		}
+		else
+		{
+			aLinks.resolved = false;
+			linksData[id] = aLinks;
+		}
+
+		// if (!elLink._hrefResolved)
+		// {
+		// 	elLink.classList.add("alert");
+		// }
+		if (url)
+		{
+			if (Array.isArray(url))
+				url = url[0];
+
+			aLinks.resolved = true;
+			linkUpdate(elLink, url, force);
+			continue;
+		}
+		if (isInited && !force)
+			return;
+
+		elLink.classList.add("notResolved");
+		if (!SETTINGS.resolveLinks)
+			return;
+
+		if (datasets.loading === undefined)
+			datasets.loading = 0;
+
+		datasets.loading++;
+
+		/**
+		 * Resolves a URL
+		 * @function
+		 * @param {string} id - The ID of the deal to resolve.
+		 * @param {string} type - The type of the deal to resolve.
+		 * @param {string} url - The URL to resolve.
+		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
+		 */
+		resolveUrl(id, type, elLink._hrefOrig)
+			.then(response =>
+			{
+				if (!response || response instanceof Response || response.byteLength === 0)
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : ""));
+
+				response = new Uint8Array(response);
+				const k = new TextEncoder().encode(id + type);
+				const r = new Uint8Array(response.length)
+					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
+
+				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+				try
+				{
+					if (!/^https?:\/\//.test(response))
+						return;
+
+					SETTINGS(id + type, response);
+					for(let i = 0; i < aLinks.length; i++)
+						linkUpdate(aLinks[i], response);
+
+					aLinks.resolved = true;
+				}
+				catch{}
+				return response;
+			})
+			.finally(() =>
+			{
+				if (!--datasets.loading)
+					delete datasets.loading;
+
+			})
+			.catch(console.error);
+	}
+};
+
+/**
+ * Updates a link with a new URL and styling to indicate that it has been resolved.
+ * @function
+ * @param {HTMLAnchorElement} elA - The link to update.
+ * @param {string} url - The new URL to set on the link.
+ * @returns {void}
+ */
+const linkUpdate = (elA, url, update) =>
+{
+	// elA.classList.remove("alert");
+	if (elA._hrefResolved && !update)
+		return;
+
+	if (url)
+		elA._hrefResolved = url;
+
+	elA.classList.toggle("notResolved", !elA._hrefResolved);
+	const elHover = elA.querySelector("a.overlayUrl");
+	if (SETTINGS.resolveLinks && elA._hrefResolved)
+	{
+		if (elHover)
+		{
+			elHover.title = "Original link";
+			elHover.href = elA._hrefOrig;
+			elHover.classList.remove("hidden");
+		}
+		elA.href = elA._hrefResolved;
+		elA.classList.add("resolved");
+		elA.classList.remove("tracked");
+	}
+	else
+	{
+		if (elHover)
+		{
+			elHover.classList.toggle("hidden", !elA._hrefResolved);
+			elHover.title = "Resolved link";
+			elHover.href = elA._hrefResolved;
+		}
+		elA.href = elA._hrefOrig;
+		elA.classList.add("tracked");
+		elA.classList.remove("resolved");
+	}
+	// a.title = a._hrefResolved;
+};
+
+/**
+ * Updates links on the page based on the current settings.
+ * If resolveLinks is enabled, it processes all unresolved links on the page.
+ * Otherwise, it updates all links in the linksData object.
+ */
+const updateLinks = () =>
+{
+	if (SETTINGS.resolveLinks)
+	{
+		const nlList = $$(".notResolved", document.body, true);
+		if (nlList.length > 0)
+			processLinks(nlList, true);
+	}
+	for(const id in linksData)
+	{
+		const aLinks = linksData[id];
+		for(let i = 0; i < aLinks.length; i++)
+		{
+			linkUpdate(aLinks[i], undefined, true);
+		}
+	}
+};
+
+/**
+ * Resolves a given URL by fetching data from the Slickdeals API and updating all links with the same deal ID.
+ * @function
+ * @param {string} id - The ID of the deal to resolve.
+ * @param {string} type - The type of the deal to resolve.
+ * @param {string} url - The URL to resolve.
+ * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
+ */
+const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
+	.then(r => r && r.ok && r.arrayBuffer() || r)
+	.catch(fVoid);
+
+/**
+* Extracts the ID and type of a deal from a given URL.
+ * @function
+ * @param {string} url - The URL to parse.
+ * @returns {Object|boolean} - An object containing the ID and type of the resource, or false if no ID was found.
+ */
+const getUrlInfo = (() =>
+{
+	const ids = ["pno", "tid", "sdtid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
+	const queryConvert = {
+		// sdtid : "tid"
+	};
+	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
+	return url =>
+	{
+		if (new URL(url).hostname !== "slickdeals.net")
+			return false;
+
+		let type;
+		let id;
+		for (let i = 0; i < ids.length; i++)
+		{
+			[, type, id] = ids[i].exec(url) || [];
+			if (id !== undefined)
+				break;
+		}
+		if (type === undefined)
+			return false;
+
+		type = queryConvert[type] || type;
+
+		const matchLNO = reLno.exec(url);
+		if (matchLNO)
+			id += "-" + matchLNO[1];
+
+		return {id, type};
+	};
+})();
 
 /**
  * Injects custom CSS into the document.
