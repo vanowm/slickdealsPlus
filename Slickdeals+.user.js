@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.7.7
+// @version      24.7.7-205129
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -13,11 +13,12 @@
 {
 "use strict";
 console.log("Slickdeals+ starting");
-const CHANGES = `! Menu sometimes not shown`;
+const CHANGES = `! script fails on safari`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 // we can use GM_info.script.version but if we use external editor, it shows incorrect version
-const VERSION = document.currentScript?.textContent.match(/^\/\/ @version\s+(.+)$/m)[1] || GM_info.script.version;
+const VERSION = (document.currentScript?.textContent.match(/^\/\/ @version\s+(.+)$/m) || ["", "24.7.7-205129"])[1] || GM_info.script.version;
+
 /**
  * A function that reads and writes data to the browser's local storage.
  * @function
