@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.7.7
+// @version      24.7.8
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -12,12 +12,13 @@
 ((css, api) =>
 {
 "use strict";
-console.log("Slickdeals+ starting");
-const CHANGES = `! Menu sometimes not shown`;
+
+console.log("Slickdeals+ is starting");
+const VERSION = "24.7.8";
+const CHANGES = `! script fails on safari`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
-// we can use GM_info.script.version but if we use external editor, it shows incorrect version
-const VERSION = document.currentScript?.textContent.match(/^\/\/ @version\s+(.+)$/m)[1] || GM_info.script.version;
+
 /**
  * A function that reads and writes data to the browser's local storage.
  * @function
@@ -435,6 +436,14 @@ const fVoid = () => {};
 const debug = Object.assign(SETTINGS.debug === 1 ? console.log.bind(console) : fVoid
 	, {trace: console.trace.bind(console)});
 const debugPrefix = "%cSlickdeals+ ";
+
+/**
+ * Converts input into a string and trims whitespace.
+ * @function
+ * @param {string} t - The string to trim.
+ * @returns {string} The trimmed string.
+ */
+const trim = t => ("" + t).trim();
 
 /*------------[ ad blocking ]------------*/
 /**
@@ -1360,14 +1369,6 @@ const $$ = (id, node, all) =>
 	catch
 	{}
 };
-
-/**
- * Converts input into a string and trims whitespace.
- * @function
- * @param {string} t - The string to trim.
- * @returns {string} The trimmed string.
- */
-const trim = t => ("" + t).trim();
 
 const elMenu = document.querySelector(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
 if (elMenu)
