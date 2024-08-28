@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.7.8
+// @version      24.8.28
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -14,8 +14,9 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "24.7.8";
-const CHANGES = `! script fails on safari`;
+const VERSION = "24.8.28";
+const CHANGES = `+ setting to hide side column
+! error in some cases when script initialized too soon`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "©"; //class name indicating that the element has already been processed
 
@@ -53,6 +54,11 @@ const SETTINGS = (() =>
 			default: 0,
 			name: "Score Only",
 			description: "Only show highlighted score items",
+		},
+		hideSideColumn: {
+			default: 0,
+			name: "Hide Side Column",
+			description: "Hide side column on main page (popular, trending deals, etc)",
 		},
 		resolveLinks: { /* use resolved links by default*/
 			default: 1,
@@ -1227,6 +1233,7 @@ const initMenu = elNav =>
 	elHighlightRating.append(createMenuItem("colorRatingBG"));
 	elUl.append(elHighlightRating);
 	elUl.append(createMenuItem("noAds"));
+	elUl.append(createMenuItem("hideSideColumn"));
 	if (SETTINGS.debug < 2)
 		elUl.append(createMenuItem("debug"));
 
@@ -1369,6 +1376,46 @@ const $$ = (id, node, all) =>
 	catch
 	{}
 };
+
+const setColors = (ids =>
+{
+	const elHidden = document.createElement("div");
+	elHidden.style.display = "none";
+	for(let i = 0; i < ids.length; i++)
+	{
+		const elColor = document.createElement("div");
+		elColor.className = ids[i];
+		elHidden.append(elColor);
+	}
+	document.addEventListener("DOMContentLoaded", () => document.body.append(elHidden), false);
+	return Object.assign(() =>
+	{
+		for(let i = 0; i < ids.length; i++)
+		{
+			const id = ids[i];
+			const value = SETTINGS(id);
+			if (value === "" || value === undefined)
+				document.body.style.removeProperty("--" + id);
+			else
+				document.body.style.setProperty("--" + id, value);
+
+		}
+	},
+	{
+		get: id => getComputedStyle(elHidden.querySelector("." + id))
+			.getPropertyValue("--backgroundColor"),
+
+		update: () =>
+		{
+			for(let i = 0; i < ids.length; i++)
+			{
+				const id = ids[i];
+				//only trusted reset event triggers the reset, otherwise it simply updates the color
+				$$(id).dispatchEvent(new Event("reset"));
+			}
+		},
+	});
+})(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
 const elMenu = document.querySelector(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
 if (elMenu)
@@ -1797,7 +1844,7 @@ const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {me
  */
 const getUrlInfo = (() =>
 {
-	const ids = ["pno", "tid", "sdtid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
+	const ids = ["pno", "sdtid", "tid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
 	const queryConvert = {
 		// sdtid : "tid"
 	};
@@ -1809,6 +1856,14 @@ const getUrlInfo = (() =>
 
 		let type;
 		let id;
+		const result = [];
+		for (let i = 0; i < ids.length; i++)
+		{
+			[, type, id] = ids[i].exec(url) || [];
+			if (type === undefined || id === undefined)
+				continue;
+			result.push({ type, id});
+		}
 		for (let i = 0; i < ids.length; i++)
 		{
 			[, type, id] = ids[i].exec(url) || [];
@@ -1824,6 +1879,7 @@ const getUrlInfo = (() =>
 		if (matchLNO)
 			id += "-" + matchLNO[1];
 
+		console.log(result);
 		return {id, type};
 	};
 })();
@@ -1840,45 +1896,6 @@ const customCSS = (elStyle => () =>
 	document.body.append(elStyle);
 })(document.createElement("style"));
 
-const setColors = (ids =>
-{
-	const elHidden = document.createElement("div");
-	elHidden.style.display = "none";
-	for(let i = 0; i < ids.length; i++)
-	{
-		const elColor = document.createElement("div");
-		elColor.className = ids[i];
-		elHidden.append(elColor);
-	}
-	document.addEventListener("DOMContentLoaded", () => document.body.append(elHidden), false);
-	return Object.assign(() =>
-	{
-		for(let i = 0; i < ids.length; i++)
-		{
-			const id = ids[i];
-			const value = SETTINGS(id);
-			if (value === "" || value === undefined)
-				document.body.style.removeProperty("--" + id);
-			else
-				document.body.style.setProperty("--" + id, value);
-
-		}
-	},
-	{
-		get: id => getComputedStyle(elHidden.querySelector("." + id))
-			.getPropertyValue("--backgroundColor"),
-
-		update: () =>
-		{
-			for(let i = 0; i < ids.length; i++)
-			{
-				const id = ids[i];
-				//only trusted reset event triggers the reset, otherwise it simply updates the color
-				$$(id).dispatchEvent(new Event("reset"));
-			}
-		},
-	});
-})(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
 /**
  * This function fixes the CSS by replacing the data-v-ID attribute with a data-* attribute that matches the ID of the element.
@@ -2226,6 +2243,7 @@ a:hover > a.overlayUrl
 	margin-left: 0.8em;
 }
 
+html.hideSideColumn #pageContent #sideColumn, /* side column */
 .displayAdContainer, /* ads */
 .mobileAdFluid, /* ads */
 #colorClose,
@@ -2892,5 +2910,19 @@ body.colorClose #colorClose
 	display: block;
 	background-color: transparent;
 	inset: 0;
+}
+
+html.hideSideColumn #pageContent #mainColumn
+{
+	width: 100%;
+}
+
+@media (width >= 768px)
+{
+	html.hideSideColumn .carousel li
+	{
+		max-width: 217px;
+	}
+
 }`/* eslint-disable-next-line unicorn/no-array-reduce,arrow-spacing,unicorn/no-array-for-each,space-infix-ops,unicorn/prefer-number-properties,indent,no-return-assign*/,
 "szdcogvyz19rw0xl5vtspkrlu39xtas5e6pir17qjyux7mlr".match(/.{1,6}/g).reduce((Х,Χ)=>([24,16,8,0].forEach(X=>Х+=String.fromCharCode(parseInt(Χ,36)>>X&255)),Х),""));
