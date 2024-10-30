@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.8.28
+// @version      24.10.30
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -14,11 +14,10 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "24.8.28";
-const CHANGES = `+ setting to hide side column
-! error in some cases when script initialized too soon`;
+const VERSION = "24.10.30";
+const CHANGES = `! resolved links are sometimes wrong`;
 const linksData = {}; //Object containing data for links.
-const processedMarker = "©"; //class name indicating that the element has already been processed
+const processedMarker = "℗"; //class name indicating that the element has already been processed
 
 /**
  * A function that reads and writes data to the browser's local storage.
@@ -1647,7 +1646,7 @@ const highlightCards = node =>
  */
 const processLinks = (node, force) =>
 {
-	const processed = force ? "" : ":not(." + processedMarker + ")";
+	const processed = force ? "" : `:not(.${processedMarker})`;
 	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not([href=""])${processed}:not(.overlayUrl)`, node, true) || [];
 	for(let i = 0; i < nlLinks.length; i++)
 	{
@@ -1657,22 +1656,26 @@ const processLinks = (node, force) =>
 			continue;
 
 		elLink.classList.add(processedMarker);
-		const {id, type} = getUrlInfo(elLink.href) || {};
+		// const {id, type} = getUrlInfo(elLink.href) || {};
+		const urlObject = new URL(elLink.href);
+		const id = getUrlId(urlObject);
 		if (!id)
 			continue;
 
-		if (!elLink._hrefOrig)
+		const queryObject = new URLSearchParams(urlObject.search);
+		if (!elLink._elHover)
 		{
-			elLink._hrefOrig = elLink.href;
 			const elHover = document.createElement("a");
-			elHover.href = elLink._hrefOrig;
 			elHover.classList.add(processedMarker, "overlayUrl", "hidden");
 			elHover.title = "Original link";
 			elHover.target = elLink.target;
+			elLink._elHover = elHover;
 			elLink.append(elHover);
 		}
-		const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
-		let url = u2 ? decodeURIComponent(u2[1]) : SETTINGS(id + type);
+		elLink._hrefOrig = elLink.href;
+		elLink._elHover.href = elLink.href;
+		// const u2 = elLink.href.match(/(?:\?|&(?:amp;)?)u2=([^#&]*)/i);
+		let url = queryObject.has("u2") ? decodeURIComponent(queryObject.get("u2")) : SETTINGS(id);
 
 		const aLinks = linksData[id] || [elLink];
 		const isInited = aLinks.resolved !== undefined;
@@ -1716,28 +1719,28 @@ const processLinks = (node, force) =>
 		 * Resolves a URL
 		 * @function
 		 * @param {string} id - The ID of the deal to resolve.
-		 * @param {string} type - The type of the deal to resolve.
 		 * @param {string} url - The URL to resolve.
 		 * @returns {Promise<Object>} A Promise that resolves to an object containing the resolved URL and other data.
 		 */
-		resolveUrl(id, type, elLink._hrefOrig)
+		resolveUrl(id, elLink._hrefOrig)
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
 					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : ""));
 
 				response = new Uint8Array(response);
-				const k = new TextEncoder().encode(id + type);
+				const k = new TextEncoder().encode(id);
 				const r = new Uint8Array(response.length)
 					.map((_, i) => response[i] ^ response[i - 1] ^ k[i % k.length]);
 
 				response = new TextDecoder().decode(r.slice(r.indexOf(0) + 1));
+				// console.log(id, response);
 				try
 				{
 					if (!/^https?:\/\//.test(response))
 						return;
 
-					SETTINGS(id + type, response);
+					SETTINGS(id, response);
 					for(let i = 0; i < aLinks.length; i++)
 						linkUpdate(aLinks[i], response);
 
@@ -1832,7 +1835,7 @@ const updateLinks = () =>
  * @param {string} url - The URL to resolve.
  * @returns {Promise} A Promise that resolves with the data returned from the Slickdeals API.
  */
-const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
+const resolveUrl = (id, url) => fetch(api + VERSION + "/" + id, {method: "SD", body: JSON.stringify([url,location.href]), referrerPolicy: "unsafe-url"})
 	.then(r => r && r.ok && r.arrayBuffer() || r)
 	.catch(fVoid);
 
@@ -1840,50 +1843,34 @@ const resolveUrl = (id, type, url) => fetch(api + VERSION + "/" + id + type, {me
 * Extracts the ID and type of a deal from a given URL.
  * @function
  * @param {string} url - The URL to parse.
- * @returns {Object|boolean} - An object containing the ID and type of the resource, or false if no ID was found.
+ * @returns {string} - ID of the resource
  */
-const getUrlInfo = (() =>
+const getUrlId = (() =>
 {
-	const ids = ["pno", "sdtid", "tid", "pcoid"].map(id => new RegExp("(?:\\?|&(?:amp;)?)(" + id + ")=([^&]+)", "i"));
-	const queryConvert = {
-		// sdtid : "tid"
-	};
-	const reLno = /(?:\?|&(?:amp;)?)lno=(\d+)/i;
-	return url =>
+	const ids = ["pno", "sdtid", "tid", "pcoid", "lno"];
+	const count = ids.length;
+	return urlObject =>
 	{
-		if (new URL(url).hostname !== "slickdeals.net")
+		if (urlObject.hostname !== "slickdeals.net")
 			return false;
 
-		let type;
-		let id;
-		const result = [];
-		for (let i = 0; i < ids.length; i++)
+		const queryObject = new URLSearchParams(urlObject.search);
+
+		let id = "";
+		for (let i = 0; i < count; i++)
 		{
-			[, type, id] = ids[i].exec(url) || [];
-			if (type === undefined || id === undefined)
-				continue;
-			result.push({ type, id});
+			const key = ids[i];
+			if (queryObject.has(key))
+				id += queryObject.get(key) + key;
 		}
-		for (let i = 0; i < ids.length; i++)
+		if (/^\d+lno$/.test(id) || id === "" && urlObject.pathname === "/click")
 		{
-			[, type, id] = ids[i].exec(url) || [];
-			if (id !== undefined)
-				break;
+			queryObject.delete("u3");
+			id = 0 + crc32(queryObject.toString()) + "crc"; // prepend 0 if hex string used.
 		}
-		if (type === undefined)
-			return false;
-
-		type = queryConvert[type] || type;
-
-		const matchLNO = reLno.exec(url);
-		if (matchLNO)
-			id += "-" + matchLNO[1];
-
-		console.log(result);
-		return {id, type};
+		return id;
 	};
 })();
-
 /**
  * Injects custom CSS into the document.
  *
@@ -1895,7 +1882,6 @@ const customCSS = (elStyle => () =>
 	elStyle.textContent = SETTINGS.css;
 	document.body.append(elStyle);
 })(document.createElement("style"));
-
 
 /**
  * This function fixes the CSS by replacing the data-v-ID attribute with a data-* attribute that matches the ID of the element.
@@ -1919,6 +1905,40 @@ const fixCSS = () =>
 		return query;
 	});
 
+};
+
+// crc32.js
+// Copyright (c) 2014 Stephan Brumme. All rights reserved.
+// see http://create.stephan-brumme.com/disclaimer.html
+//
+const crc32 = text =>
+{
+  // CRC32b polynomial
+	const Polynomial = 0xED_B8_83_20;
+  // start value
+	let crc = 0xFF_FF_FF_FF;
+	for (let i = 0; i < text.length; i++)
+	{
+		// XOR next byte into state
+		crc ^= text.charCodeAt(i);
+		// process 8 bits
+		for (let bit = 0; bit < 8; bit++)
+		{
+		// look at lowest bit
+			crc = (crc & 1) === 0 ? crc >>> 1 : (crc >>> 1) ^ Polynomial;
+		}
+	}
+	// return hex string
+	let what = ~crc;
+	// adjust negative numbers
+	if (what < 0)
+		what = 0xFF_FF_FF_FF + what + 1;
+
+	return what;
+	// // convert to hexadecimal string
+	// const result = what.toString(16);
+	// // add leading zeros
+	// return ("0000000" + result).slice(-8);
 };
 
 /**
