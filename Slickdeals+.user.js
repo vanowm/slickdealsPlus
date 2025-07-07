@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      24.10.30
+// @version      25.7.7
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -14,8 +14,9 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "24.10.30";
-const CHANGES = `! resolved links are sometimes wrong`;
+const VERSION = "25.7.7";
+const CHANGES = `! script failed to initialize due to ad-blocking
+! dark mode detection`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -692,6 +693,7 @@ const noAds = (() =>
 			/frontpagecontroller/i, //Personalized Frontpage
 			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
 			/SECURITYTOKEN/, //voting
+			/__NUXT__/
 		],
 
 		blockUrlFull: new Set([
@@ -877,7 +879,7 @@ const noAds = (() =>
 				}
 				// debug(debugPrefix + "allowed%c iframe", colors[0], colors.iframe, node.src, CLONE(isAds.result), node);
 			}
-			else if (node instanceof HTMLScriptElement)
+			else if (node instanceof HTMLScriptElement && node.type !== "application/json")
 			{
 				const url = node.src;
 				const textContent = node.textContent;
@@ -888,6 +890,7 @@ const noAds = (() =>
 						colors.script,
 						CLONE(isAds.result),
 						url,
+						[node],
 						textContent,
 					);
 					node.remove();
@@ -1866,7 +1869,9 @@ const getUrlId = (() =>
 		if (/^\d+lno$/.test(id) || id === "" && urlObject.pathname === "/click")
 		{
 			queryObject.delete("u3");
-			id = 0 + crc32(queryObject.toString()) + "crc"; // prepend 0 if hex string used.
+			// prepend 0 if hex string used,
+			// otherwise it will be ignored.
+			id = 0 + crc32(queryObject.toString()) + "crc";
 		}
 		return id;
 	};
@@ -1950,9 +1955,20 @@ const init = () =>
 {
 	document.removeEventListener("DOMContentLoaded", init, false);
 
-	const isDarkMode = document.body.matches("[class*=darkMode]"); //bp-s-darkMode
-
-	document.body.classList.toggle("darkMode", isDarkMode);
+	const darkModeClasses = ["bp-s-darkMode", "midnight"];
+	const _isDarkMode = () => darkModeClasses.some(className => document.body.classList.contains(className));
+	document.body.classList.toggle("darkMode", _isDarkMode());
+	const observer = new MutationObserver(mutations =>
+	{
+		for (const mutation of mutations)
+		{
+			if (mutation.type === "attributes")
+			{
+				document.body.classList.toggle("darkMode", _isDarkMode());
+			}
+		}
+	});
+	observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
 
 	fixCSS();
 	window.addEventListener("load", fixCSS, false);
