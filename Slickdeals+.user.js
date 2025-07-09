@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      25.7.7
+// @version      25.7.9
 // @license      MIT
 // @run-at       document-start
 // @grant        none
@@ -14,9 +14,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "25.7.7";
-const CHANGES = `! script failed to initialize due to ad-blocking
-! dark mode detection`;
+const VERSION = "25.7.9";
+const CHANGES = `! search page`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -681,19 +680,22 @@ const noAds = (() =>
 		allowUrlFull: new Set([]),
 
 		allowHostname: [
-			/:\/\/slickdeals\.net\//
+			/:\/\/slickdeals\.net\//,
+			// /.*/,
 		],
 		allowUrl: [
 			/google\.com\/recaptcha\//,
 			/fonts\.googleapis\.com/,
 			// /accounts\.google\.com\//
+			// /.*/,
 		],
 		allowText: [
 			/vue\.createssrapp/i,
 			/frontpagecontroller/i, //Personalized Frontpage
 			/^\(window\.vuerangohooks = window\.vuerangohooks/i, //See expired deals
 			/SECURITYTOKEN/, //voting
-			/__NUXT__/
+			/__NUXT__/,
+			// /.*/,
 		],
 
 		blockUrlFull: new Set([
@@ -791,9 +793,10 @@ const noAds = (() =>
 	 * @param {string} textContent - The text content to check.
 	 * @returns {boolean} Whether the URL or text content is an advertisement.
 	 */
-	const isAds = Object.assign((url, textContent) =>
+	const isAds = Object.assign((_url, textContent) =>
 	{
 		let hostname = "";
+		const url = _url instanceof Request ? _url.url : _url;
 		try
 		{
 			hostname = url ? new URL(url).hostname : "";
@@ -921,10 +924,15 @@ const noAds = (() =>
 
 				node.parentElement.remove();
 			}
-			else if (node.matches("[data-role=rightRailBanner],[class*=bannerAd],[class*=Banner],[class*=ad-],[class*=contentAd],[data-adlocation]"))
+			else if (node.matches("[data-role=rightRailBanner],[class*=ad-],[class*=contentAd],[data-adlocation],[class*=_leftAd],[class*=_rightAd]"))
 			{
 				node.remove();
 			}
+			/* add deal alert */
+			// else if (node.parentElement.matches(".searchPage__main") && node.matches("[class*=Banner]"))
+			// {
+				// setTimeout(() => node.remove(), 0);
+			// }
 		}
 	};
 })();
@@ -1729,7 +1737,7 @@ const processLinks = (node, force) =>
 			.then(response =>
 			{
 				if (!response || response instanceof Response || response.byteLength === 0)
-					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : ""));
+					throw new Error("URL not resolved " + (response instanceof Response ? response.headers.get("error") : "")/* + " id:" + id + " original:" + elLink._hrefOrig*/);
 
 				response = new Uint8Array(response);
 				const k = new TextEncoder().encode(id);
@@ -2103,6 +2111,11 @@ body.darkMode li.free
 .resultRow.highlightRating
 {
 	background-color: var(--backgroundColor);
+}
+
+.searchPage__headerContent:empty
+{
+	display: none;
 }
 
 /* stylelint-disable-next-line no-descending-specificity */
