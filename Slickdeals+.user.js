@@ -3,9 +3,10 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      25.7.9
+// @version      25.7.18
 // @license      MIT
 // @run-at       document-start
+// @inject-into  auto
 // @grant        none
 // ==/UserScript==
 
@@ -14,8 +15,9 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "25.7.9";
-const CHANGES = `! search page`;
+const VERSION = "25.7.18";
+const CHANGES = `! side layout with hidden side column
+! black text on dark background in changes log from menu`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -924,15 +926,13 @@ const noAds = (() =>
 
 				node.parentElement.remove();
 			}
-			else if (node.matches("[data-role=rightRailBanner],[class*=ad-],[class*=contentAd],[data-adlocation],[class*=_leftAd],[class*=_rightAd]"))
+			else if (node.matches("[data-role=rightRailBanner],[class*=bannerAd],[class*=Banner],[class*=ad-],[class*=contentAd],[data-adlocation],[class*=_leftAd],[class*=_rightAd]"))
 			{
-				node.remove();
+				if (node.parentElement.matches(".searchPage__main") && node.matches("[class*=Banner]"))
+					setTimeout(() => node.remove(), 0);
+				else
+					node.remove();
 			}
-			/* add deal alert */
-			// else if (node.parentElement.matches(".searchPage__main") && node.matches("[class*=Banner]"))
-			// {
-				// setTimeout(() => node.remove(), 0);
-			// }
 		}
 	};
 })();
@@ -2113,11 +2113,6 @@ body.darkMode li.free
 	background-color: var(--backgroundColor);
 }
 
-.searchPage__headerContent:empty
-{
-	display: none;
-}
-
 /* stylelint-disable-next-line no-descending-specificity */
 li.highlightRating.highlightDiff,
 li.highlightRating.highlightDiff .dealCard[data-v-ID],
@@ -2293,6 +2288,7 @@ a:hover > a.overlayUrl
 }
 
 html.hideSideColumn #pageContent #sideColumn, /* side column */
+html.hideSideColumn aside.slickdealsSidebar.redesignFrontpageDesktop__sidebar, /* side column */
 .displayAdContainer, /* ads */
 .mobileAdFluid, /* ads */
 #colorClose,
@@ -2352,7 +2348,8 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .deals li:not(.h
 html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageMobileRecommendationCarousel__list li:not(.highlightDiff,.highlightRating,.free), /* mobile */
 html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .categoryPage__main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .bp-p-categoryPage_main li:not(.highlightDiff,.highlightRating,.free), /* https://slickdeals.net/deals/*** */
-html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.highlightRating,.free)
+html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid li:not(.highlightDiff,.highlightRating,.free),
+.searchPage__headerContent:empty /* search results */
 {
 	display: none;
 }
@@ -2415,6 +2412,11 @@ html.freeOnly.ratingOnly.highlightRating.diffOnly.highlightDiff .frontpageGrid l
 .changes > div
 {
 	padding-left: 1em;
+}
+
+.changes > *
+{
+	color: var(--mainNavTextColor);
 }
 
 .changes > div:not(:last-of-type)
@@ -2961,9 +2963,40 @@ body.colorClose #colorClose
 	inset: 0;
 }
 
-html.hideSideColumn #pageContent #mainColumn
+html.hideSideColumn #pageContent #mainColumn,
+html.hideSideColumn .redesignFrontpageDesktop__main
 {
 	width: 100%;
+}
+
+html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+{
+	column-gap: 0;
+	grid-template-columns: minmax(0, 1fr) 0;
+}
+
+@media (width >= 1203px)
+{
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	{
+		width: 1105px;
+	}
+}
+
+@media (width >= 1371px)
+{
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	{
+		width: 1322px;
+	}
+}
+
+@media (width >= 1539px)
+{
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	{
+		width: 1538px;
+	}
 }
 
 @media (width >= 768px)
