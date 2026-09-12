@@ -3,7 +3,7 @@
 // @namespace    V@no
 // @description  Various enhancements, such as ad-block, price difference and more.
 // @match        https://slickdeals.net/*
-// @version      25.7.18
+// @version      26.9.12
 // @license      MIT
 // @run-at       document-start
 // @inject-into  auto
@@ -15,9 +15,8 @@
 "use strict";
 
 console.log("Slickdeals+ is starting");
-const VERSION = "25.7.18";
-const CHANGES = `! side layout with hidden side column
-! black text on dark background in changes log from menu`;
+const VERSION = "26.9.12";
+const CHANGES = `adapted to new layout`;
 const linksData = {}; //Object containing data for links.
 const processedMarker = "℗"; //class name indicating that the element has already been processed
 
@@ -451,6 +450,12 @@ const debugPrefix = "%cSlickdeals+ ";
  * @returns {string} The trimmed string.
  */
 const trim = t => ("" + t).trim();
+
+// These are assigned after the document-start hooks are installed. Keeping
+// callable placeholders avoids a temporal-dead-zone error when page scripts
+// update an anchor before the userscript has finished evaluating.
+let processLinks = fVoid;
+let linkUpdate = fVoid;
 
 /*------------[ ad blocking ]------------*/
 /**
@@ -938,10 +943,86 @@ const noAds = (() =>
 })();
 noAds(document);
 
-const style = document.createElement("style");
-style.innerHTML = css;
-if (document.head)
-	document.head.append(style);
+/**
+ * Utility for injecting CSS into the document head.
+ * Maintains a map of injected styles and provides methods to inject, remove, or re-inject all styles.
+ *
+ * @type {Object}
+ * @property {Function} remove - Removes a style element from the document and internal map.
+ * @property {Function} inject - Injects all stored styles into the document head.
+ * @returns {Function} - Main function to inject CSS, or inject all if called with undefined.
+ */
+const cssInject = (() =>
+{
+	const cssMap = new Map();
+	const elMap = new Map();
+	const inject = (cssData, html) =>
+	{
+		const isExists = cssMap.has(cssData);
+		const elStyle = isExists ? cssMap.get(cssData) : document.createElement("style");
+		elStyle[html ? "innerHTML" : "textContent"] = cssData;
+
+		// console.log("Injecting CSS", elStyle, document.head, isExists, cssMap, cssData);
+		if (isExists)
+		{
+			cssMap.delete(cssData);
+			elMap.delete(elStyle);
+		}
+		else
+			elStyle.className = "SDP";
+
+		cssMap.set(cssData, elStyle);
+		elMap.set(elStyle, cssData);
+
+		if (document.head.isConnected)
+			document.head.append(elStyle);
+
+		return elStyle;
+	};
+	const injectAll = () =>
+	{
+		for(const data of cssMap)
+			document.head.append(data[1]);
+	};
+	return Object.assign((cssData, html) => (cssData === undefined ? injectAll() : inject(cssData, html)), {
+		remove: elStyle => elStyle.remove() || cssMap.delete(elStyle),
+		elExists: _el => elMap.has(_el),
+		cssExists: _css => cssMap.has(_css),
+	});
+})();
+/**
+ * Injects custom CSS into the document.
+ *
+ * @function
+ * @returns {void}
+ */
+const customCSS = () => cssInject(SETTINGS.css);
+
+// let elStyleMain;
+const elStyleMain = cssInject("/* Slickdeals+ main CSS */");
+/**
+ * This function fixes the CSS by replacing the data-v-ID attribute with a data-* attribute that matches the ID of the element.
+ * @function
+ * @returns {void}
+ */
+const fixCSS = () =>
+{
+	const reCssFindId = /^v([A-F]|-\d)/;
+	const cssFindId = reCssFindId.test.bind(reCssFindId);
+	elStyleMain.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
+	{
+		const element = document.body.querySelector(query);
+		if (element)
+		{
+			const keys = Object.keys(element.dataset);
+			const id = keys.find(cssFindId);
+			if (id)
+				return query + "[data-" + id.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() + "]";
+		}
+		return query;
+	});
+
+};
 
 // if (document.head)
 // 	noAds(document.head);
@@ -958,12 +1039,23 @@ if (document.head)
  */
 const initMenu = elNav =>
 {
-	if (initMenu._inited)
+	if (!elNav || initMenu._inited && initMenu.elMenu?.isConnected)
 		return;
 
-	initMenu._inited = true;
-	if (elNav.children.length < 4 && --initMenu.counter)
-		return setTimeout(() => initMenu(elNav), 0);
+	// The last header item used to be a dropdown. It is now the mobile-only
+	// Feedback link, so clone the first item that actually has dropdown parts.
+	const elMenuTemplate = [...elNav.children].find(element =>
+		element.querySelector(".slickdealsHeader__navItemText")
+		&& element.querySelector(".slickdealsHeader__dropdown")
+		&& element.querySelector("[role='button']")
+	);
+	if (!elMenuTemplate)
+	{
+		if (--initMenu.counter)
+			setTimeout(() => initMenu(elNav), 0);
+
+		return;
+	}
 
 	/**
 	 * Creates a menu item for a user setting.
@@ -976,7 +1068,8 @@ const initMenu = elNav =>
 		const type = SETTINGS.$type[id];
 		const label = SETTINGS.$name[id];
 		const description = SETTINGS.$description[id];
-		const elStyle = document.createElement("style");
+		// const elStyle = document.createElement("style");
+		const elStyle = cssInject(`/* ${id} */`);
 		const types = {
 			text : "input",
 			color : "input",
@@ -1169,15 +1262,22 @@ const initMenu = elNav =>
 		if (elLabelAfter)
 			elLi.append(elLabelAfter);
 
-		document.head.append(elStyle);
+		// document.head.append(elStyle);
 		return elLi;
 	};//createMenuItem
 
-	const elMenu = elNav.lastElementChild.cloneNode(true);
-	initMenu.elMenu = elMenu;
-	datasets.__target.push(elMenu.dataset, elMenu.querySelector(".slickdealsHeader__navItemText").dataset);
-	initMenu.elHeader = elNav;
+	const elMenu = elMenuTemplate.cloneNode(true);
+	const elMenuText = elMenu.querySelector(".slickdealsHeader__navItemText");
+	const elUl = elMenu.querySelector(".slickdealsHeader__dropdown");
+	const elButton = elMenu.querySelector("[role='button']");
+	const elLiTemplate = elUl?.querySelector("li");
 	const elHeader = elNav.closest("header");
+	if (!elMenuText || !elUl || !elButton || !elLiTemplate || !elHeader)
+		return;
+
+	initMenu.elMenu = elMenu;
+	datasets.__target.push(elMenu.dataset, elMenuText.dataset);
+	initMenu.elHeader = elNav;
 	const elOverlay = document.createElement("div");
 	initMenu.elOverlay = elOverlay;
 	for (const i in elMenu.dataset)
@@ -1189,9 +1289,7 @@ const initMenu = elNav =>
 
 	elMenu.classList.add("sdp-menu");
 	elMenu.dataset.qaHeaderDropdownButton = "slickdeals-plus";
-	elMenu.querySelector("p").textContent = "Slickdeals+";
-	const elUl = elMenu.querySelector("ul");
-	const elButton = elMenu.querySelector("div[role='button']");
+	elMenuText.textContent = "Slickdeals+";
 
 	elButton.addEventListener("focus", () => elHeader.after(elOverlay), true);
 	elButton.addEventListener("blur", () => elOverlay.remove(), true);
@@ -1216,11 +1314,10 @@ const initMenu = elNav =>
 	const loading = document.documentElement.dataset.loading;
 
 	elUl.dataset.qaHeaderDropdownList = "slickdeals-plus";
-	const elLiDefault = elUl.querySelector("li").cloneNode(true);
-	const dataset = Object.keys(elLiDefault.firstElementChild.dataset)[0];
+	const elLiDefault = elLiTemplate.cloneNode(true);
+	const dataset = Object.keys(elLiDefault.firstElementChild?.dataset || {})[0];
 	elUl.innerHTML = "";
 	elLiDefault.innerHTML = "";
-	elNav.append(elMenu);
 
 	const elFreeOnly = createMenuItem("freeOnly");
 	elFreeOnly.append(createMenuItem("colorFreeBG"));
@@ -1323,6 +1420,9 @@ const initMenu = elNav =>
 
 	elChanges.append(elChangesLink);
 	elUl.append(elFooterCheckbox, elFooter, elChanges);
+	elNav.append(elMenu);
+	initMenu._inited = true;
+	initMenu.counter = 1000;
 	if (document.readyState === "complete")
 		setColors.update();
 	else
@@ -1427,9 +1527,10 @@ const setColors = (ids =>
 	});
 })(["colorFreeBG", "colorRatingBG", "colorDiffBG"]);
 
-const elMenu = document.querySelector(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection");
-if (elMenu)
-	initMenu(elMenu);
+const menuSelector = ".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection";
+const elMenuNav = document.querySelector(menuSelector);
+if (elMenuNav)
+	initMenu(elMenuNav);
 
 /**
  * MutationObserver callback function that tracks changes in the DOM.
@@ -1438,6 +1539,7 @@ if (elMenu)
  */
 new MutationObserver(mutations =>
 {
+	let doCssInject = false;
 	for (let i = 0; i < mutations.length; i++)
 	{
 		for (let n = 0; n < mutations[i].addedNodes.length; n++)
@@ -1447,6 +1549,9 @@ new MutationObserver(mutations =>
 			if (!node.classList)
 				continue;
 
+			if (/*node.parentElement === document.head && */node.matches("head style:not(.SDP)") && !cssInject.elExists(node))
+				doCssInject = node;
+
 			// remove ads
 			if (SETTINGS.noAds && !node.closest(".dealCard"))
 				noAds(node);
@@ -1455,12 +1560,12 @@ new MutationObserver(mutations =>
 			if (node.classList.contains(processedMarker))
 				continue;
 
-			// create menu and attach to the header
-			if (node.matches(".slickdealsHeader__hamburgerDropdown .slickdealsHeader__linkSection"))
-			{
-				initMenu(node);
-				continue;
-			}
+			// Create the menu whether the navigation list itself or one of its
+			// ancestors was added by the client-side renderer.
+			const elAddedMenuNav = node.matches(menuSelector) ? node : node.querySelector(menuSelector);
+			if (elAddedMenuNav)
+				initMenu(elAddedMenuNav);
+
 			processCards(node);
 			processLinks(node);
 		}
@@ -1471,6 +1576,11 @@ new MutationObserver(mutations =>
 				initMenu.elHeader.append(initMenu.elMenu);
 
 		}
+	}
+	if (doCssInject)
+	{
+		console.log("doCssInject", doCssInject);
+		cssInject();
 	}
 }).observe(document, {
 	subtree: true,
@@ -1504,7 +1614,12 @@ const processCards = (node, force) =>
 				`.price${processed},` + //search
 				`.bp-p-dealCard_price${processed},` + // https://slickdeals.net/deals/watches/
 				`.dealCard__price${processed},` +
+				`.dealCardListView__finalPrice${processed},` + // redesigned search, list view
+				`.dealCardV3__price${processed},` + // redesigned search, grid view
+				`.dealCardGrid__finalPrice${processed},` + // related/popular deal cards
 				`.dealDetailsMainDesktopBlock__finalPrice${processed},` +
+				`.dealDetailsMainBlock__finalPrice${processed},` +
+				`.dealDetailsStickyBar__finalPrice${processed},` +
 				`.dealPrice${processed}`
 		, node, true) || [];
 
@@ -1539,7 +1654,18 @@ const processCards = (node, force) =>
 
 		}
 		const elPriceRetail = $$(".retailPrice", elParent);
-		const elPriceOld = $$(".oldListPrice, .dealCard__originalPrice, .bp-p-dealCard_originalPrice, .dealDetailsMainDesktopBlock__listPrice", elParent);
+		const elPriceOld = $$(
+			".oldListPrice, " +
+			".dealCard__originalPrice, " +
+			".dealCardListView__listPrice, " +
+			".dealCardV3__originalPrice, " +
+			".dealCardGrid__listPrice, " +
+			".bp-p-dealCard_originalPrice, " +
+			".dealDetailsMainDesktopBlock__listPrice, " +
+			".dealDetailsMainBlock__listPrice, " +
+			".dealDetailsStickyBar__listPrice",
+			elParent
+		);
 		// make sure price element is in it's own wrapper
 		if (elParent.matches(".bp-c-card_content, .dealDetailsPriceInfo"))
 		{
@@ -1574,6 +1700,8 @@ const processCards = (node, force) =>
 		const priceDealPercent = Math.round(priceDifference * 100 / priceBase);
 		const elCard = elParent.closest(
 			"li," +
+			"div.dealRow," +
+			"div.relatedDealsCarousel__feedItem," +
 			"div[data-type='fpdeal']," +
 			"div.resultRow," +
 			"div[data-role='frontpageDealContent']"
@@ -1616,9 +1744,12 @@ const highlightCards = node =>
 		nlItems = [node];
 	else
 		nlItems = $$(	"li.frontpageGrid__feedItem," + //front page
+						"li.searchPageGrid__feedItem," + // redesigned search
 						"li.carousel__slide," + // front page carousel
 						"li.categoryPageDealGrid__feedItem," + // https://slickdeals.net/deals/
 						"li.bp-p-dealCard," + // https://slickdeals.net/deals/watches/
+						"div.dealRow," + // popular deals list
+						"div.relatedDealsCarousel__feedItem," + // deal details recommendations
 						"div.resultRow" //search result
 		, node, true);
 
@@ -1631,6 +1762,9 @@ const highlightCards = node =>
 		const elCard = nlItems[i];
 		const elVotes = elCard.querySelector(
 			".dealCardSocialControls__voteCount," + //front page
+			".dealCardSocialControls__dealScoreButton," + // redesigned grid cards
+			".dealCardListView__voteCount," + // redesigned search list
+			".dealCardVoting__dealScoreButton," + // related/popular cards
 			".bp-p-votingThumbsPopup_voteCount," + // https://slickdeals.net/deals/watches/
 			".ratingCol.stats>.num," + //search result
 			".ratingCol>.ratingNum" //search result
@@ -1655,7 +1789,7 @@ const highlightCards = node =>
  * @param {boolean} [force=false] - Whether to force processing of already processed links.
  * @returns {void}
  */
-const processLinks = (node, force) =>
+processLinks = (node, force) =>
 {
 	const processed = force ? "" : `:not(.${processedMarker})`;
 	const nlLinks = node instanceof NodeList || Array.isArray(node) ? node : $$(`a:not([href=""])${processed}:not(.overlayUrl)`, node, true) || [];
@@ -1777,7 +1911,7 @@ const processLinks = (node, force) =>
  * @param {string} url - The new URL to set on the link.
  * @returns {void}
  */
-const linkUpdate = (elA, url, update) =>
+linkUpdate = (elA, url, update) =>
 {
 	// elA.classList.remove("alert");
 	if (elA._hrefResolved && !update)
@@ -1884,41 +2018,6 @@ const getUrlId = (() =>
 		return id;
 	};
 })();
-/**
- * Injects custom CSS into the document.
- *
- * @function
- * @returns {void}
- */
-const customCSS = (elStyle => () =>
-{
-	elStyle.textContent = SETTINGS.css;
-	document.body.append(elStyle);
-})(document.createElement("style"));
-
-/**
- * This function fixes the CSS by replacing the data-v-ID attribute with a data-* attribute that matches the ID of the element.
- * @function
- * @returns {void}
- */
-const fixCSS = () =>
-{
-	const reCssFindId = /^v([A-F]|-\d)/;
-	const cssFindId = reCssFindId.test.bind(reCssFindId);
-	style.innerHTML = css.replace(/^(.*)\[data-v-ID]/gm, (txt, query) =>
-	{
-		const element = document.body.querySelector(query);
-		if (element)
-		{
-			const keys = Object.keys(element.dataset);
-			const id = keys.find(cssFindId);
-			if (id)
-				return query + "[data-" + id.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase() + "]";
-		}
-		return query;
-	});
-
-};
 
 // crc32.js
 // Copyright (c) 2014 Stephan Brumme. All rights reserved.
@@ -1980,21 +2079,25 @@ const init = () =>
 
 	fixCSS();
 	window.addEventListener("load", fixCSS, false);
-	document.head.append(style);
+	// document.head.append(elStyleMain);
 
-	//for some reason observer failed to process everything while page is still loading, so we do it manually
-	const elPageContent = $$("pageContent");
-	if (elPageContent)
-	{
-		processCards(elPageContent);
-		processLinks(elPageContent);
-	}
+	// The redesigned pages no longer share a #pageContent root. Run one
+	// document-wide pass after parsing; the processed marker keeps it cheap.
+	processCards(document);
+	processLinks(document);
+	highlightCards(document);
 	customCSS();
 	setColors();
 	debug(GM_info.script.name, "v" + VERSION, "initialized");
 };//init()
 
-document.addEventListener("DOMContentLoaded", init, false);
+// Tampermonkey can inject after DOMContentLoaded on rapidly restored or cached
+// pages. Initialize immediately in that case so pre-rendered deal cards are not
+// missed by the mutation observer.
+if (document.readyState === "loading")
+	document.addEventListener("DOMContentLoaded", init, false);
+else
+	init();
 })(`:root
 {
 	--colorMix: in srgb;
@@ -2105,10 +2208,21 @@ body.darkMode li.free
 	--highlightColor: var(--colorFree);
 }
 
+/* Redesigned cards define their own background variable. Carry the selected
+   highlight color into the card instead of leaving it on the feed item. */
+:is(li, div):is(.free, .highlightRating, .highlightDiff) > :is(.dealCard, .dealCardV3, .dealCardListView, .dealCardGrid)
+{
+	--backgroundColor: inherit;
+	--cardBackgroundColor: inherit;
+}
+
 /* search results */
 .resultRow.free,
 .resultRow.highlightDiff,
-.resultRow.highlightRating
+.resultRow.highlightRating,
+.dealRow.free,
+.dealRow.highlightDiff,
+.dealRow.highlightRating
 {
 	background-color: var(--backgroundColor);
 }
@@ -2287,8 +2401,6 @@ a:hover > a.overlayUrl
 	margin-left: 0.8em;
 }
 
-html.hideSideColumn #pageContent #sideColumn, /* side column */
-html.hideSideColumn aside.slickdealsSidebar.redesignFrontpageDesktop__sidebar, /* side column */
 .displayAdContainer, /* ads */
 .mobileAdFluid, /* ads */
 #colorClose,
@@ -2301,6 +2413,9 @@ html.freeOnly .frontpageMobileRecommendationCarousel__list li:not(.free), /* mob
 html.freeOnly .categoryPage__main li:not(.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly .bp-p-categoryPage_main li:not(.free), /* https://slickdeals.net/deals/*** */
 html.freeOnly .frontpageGrid li:not(.free),
+html.freeOnly .searchPageGrid__feedItem:not(.free),
+html.freeOnly .dealRow:not(.free),
+html.freeOnly .relatedDealsCarousel__feedItem:not(.free),
 
 html.diffOnly.highlightDiff .frontpageRecommendationCarousel li:not(.highlightDiff),
 html.diffOnly.highlightDiff .dealTiles li:not(.highlightDiff),
@@ -2771,7 +2886,10 @@ html.updated .sdp-updated
 }
 
 .blueprint .bp-p-dealCard_priceContainer, /* mobile */
-.dealCard__priceContainer[data-v-ID]
+.dealCard__priceContainer[data-v-ID],
+.dealCardListView__priceContainer,
+.dealCardV3__priceContainer,
+.dealCardGrid__priceRow
 {
 	display: flex;
 	overflow: hidden;
@@ -2792,8 +2910,11 @@ html.updated .sdp-updated
 
 html.showDiff .bp-p-dealCard_priceContainer[data-deal-diff]::after, /* mobile */
 html.showDiff .dealDetailsMainDesktopBlock__priceBlock[data-deal-diff]::after, /* deal details page */
+html.showDiff .dealDetailsMainBlock__price[data-deal-diff]::after,
+html.showDiff .dealDetailsStickyBar__price[data-deal-diff]::after,
 html.showDiff .dealDetailsPriceInfo[data-deal-diff]::after, /* deal details page */
 html.showDiff .cardPriceInfo[data-deal-diff]::after, /* https://slickdeals.net/deals/* */
+html.showDiff .priceCol[data-deal-diff]::after,
 html.showDiff .priceCol > .prices[data-deal-diff]::after, /* search result */
 html.showDiff .searchPage > .pricingInfo > .prices[data-deal-diff]::after, /* search result mobile */
 html.showDiff a[data-deal-diff]::after /* deal list page */
@@ -2963,21 +3084,51 @@ body.colorClose #colorClose
 	inset: 0;
 }
 
+/*
+ * Hide Side Column compatibility map
+ *
+ * Layout generation      Shell                       Main                            Sidebar
+ * Classic / legacy       #pageContent                #mainColumn                     #sideColumn
+ * Previous front page    .redesignFrontpageDesktop   .redesignFrontpageDesktop__main .redesignFrontpageDesktop__sidebar
+ * Current front page     .frontpageDesktop           .frontpageDesktop__main         .frontpageDesktop__sidebar
+ *
+ * To support a future redesign, add its sidebar, main, and shell selectors to the
+ * three matching groups below. The sidebar rule hides the rail, the main rule
+ * fills the freed space, and the shell rule removes the reserved grid track/gap.
+ * [data-v-ID] is replaced by fixCSS() with Slickdeals' live Vue scope attribute.
+ */
+
+/* Hide each known side rail. The sticky wrapper covers legacy hybrid pages. */
+/* stylelint-disable-next-line plugin/stylelint-group-selectors -- Keep all layout generations in this compatibility block. */
+html.hideSideColumn #pageContent #sideColumn,
+html.hideSideColumn #pageContent .stickyRightRailWrapper,
+html.hideSideColumn aside.slickdealsSidebar.redesignFrontpageDesktop__sidebar,
+html.hideSideColumn aside.slickdealsSidebar.frontpageDesktop__sidebar
+{
+	display: none;
+}
+
+/* Let the surviving content column use the space released by the side rail. */
 html.hideSideColumn #pageContent #mainColumn,
-html.hideSideColumn .redesignFrontpageDesktop__main
+html.hideSideColumn .redesignFrontpageDesktop__main,
+html.hideSideColumn .frontpageDesktop__main
 {
 	width: 100%;
 }
 
-html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+/* Collapse the redesigned two-column grid's now-empty sidebar track and gap. */
+html.hideSideColumn .redesignFrontpageDesktop[data-v-ID],
+html.hideSideColumn .frontpageDesktop[data-v-ID]
 {
 	column-gap: 0;
 	grid-template-columns: minmax(0, 1fr) 0;
 }
 
+/* Grow redesigned shells at the same breakpoints Slickdeals uses. */
 @media (width >= 1203px)
 {
-	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID],
+	html.hideSideColumn .frontpageDesktop[data-v-ID]
 	{
 		width: 1105px;
 	}
@@ -2985,7 +3136,8 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 
 @media (width >= 1371px)
 {
-	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID],
+	html.hideSideColumn .frontpageDesktop[data-v-ID]
 	{
 		width: 1322px;
 	}
@@ -2993,7 +3145,8 @@ html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
 
 @media (width >= 1539px)
 {
-	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID]
+	html.hideSideColumn .redesignFrontpageDesktop[data-v-ID],
+	html.hideSideColumn .frontpageDesktop[data-v-ID]
 	{
 		width: 1538px;
 	}

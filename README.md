@@ -18,4 +18,6 @@ Features:
 
 ![image](https://github.com/vanowm/slickdealsPlus/assets/511517/328a7870-9e85-4e24-8fd4-ca3c328c248a)
 
+[Install](https://greasyfork.org/en/scripts/474545-slickdeals)
+
 [Changes](https://vanowm.github.io/slickdealsPlus/CHANGES.html)
